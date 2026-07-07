@@ -1,26 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script>
-// ── Αυτόματη ανίχνευση γλώσσας ─────────────────────────────────────────────
-// Αν ο browser του επισκέπτη έχει Ελληνικά ως προεπιλεγμένη γλώσσα (π.χ.
-// γιατί είναι από Ελλάδα ή έχει έτσι ρυθμισμένο το λειτουργικό/browser του),
-// τον στέλνουμε αυτόματα στην ελληνική έκδοση. Τρέχει ΠΡΙΝ φορτώσει τίποτα
-// άλλο, ώστε να μη φανεί καθόλου η αγγλική σελίδα πρώτα.
-// Το ?lang=en στο URL παρακάμπτει την ανακατεύθυνση (π.χ. αν κάποιος
-// Έλληνας θέλει σκόπιμα την αγγλική έκδοση).
-(function(){
-  try {
-    var params = new URLSearchParams(window.location.search);
-    if (params.get('lang') === 'en') return; // ρητή επιλογή — μη στείλεις
-    var langs = navigator.languages || [navigator.language || navigator.userLanguage || ''];
-    var isGreek = langs.some(function(l){ return /^el\b/i.test(l); });
-    if (isGreek) {
-      window.location.replace('/EL/booking2.html');
-    }
-  } catch(e) { /* αν κάτι πάει στραβά, μένουμε απλά στα Αγγλικά */ }
-})();
-</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Book a Transfer</title>
@@ -448,6 +428,27 @@ body.is-mobile .map-gps{display:flex;}
 </style>
 </head>
 <body>
+<div id="langSuggestBanner" style="display:none;background:#112240;color:#e6f1ff;padding:10px 16px;text-align:center;font-size:.85rem;position:relative;">
+  <span>🇬🇷 Φαίνεται πως προτιμάς Ελληνικά — <a href="/EL/booking2.html" style="color:#ffd700;font-weight:600;text-decoration:underline;">μετάβαση στα Ελληνικά</a></span>
+  <button onclick="document.getElementById('langSuggestBanner').style.display='none'; try{localStorage.setItem('langBannerDismissed','1');}catch(e){}"
+    style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#8aa0c4;font-size:1.1rem;cursor:pointer;padding:0 6px;">×</button>
+</div>
+<script>
+// ── Πρόταση γλώσσας (ΧΩΡΙΣ βίαιη ανακατεύθυνση) ────────────────────────────
+// Αν ο browser έχει Ελληνικά, δείχνουμε ένα διακριτικό μπάνερ με σύνδεσμο
+// προς την ελληνική έκδοση — ο επισκέπτης αποφασίζει μόνος του. Δεν κάνει
+// ΠΟΤΕ αυτόματη ανακατεύθυνση, άρα δεν υπάρχει κίνδυνος βρόχου.
+(function(){
+  try {
+    if (localStorage.getItem('langBannerDismissed') === '1') return;
+    var langs = navigator.languages || [navigator.language || navigator.userLanguage || ''];
+    var isGreek = langs.some(function(l){ return /^el\b/i.test(l); });
+    if (isGreek) {
+      document.getElementById('langSuggestBanner').style.display = 'block';
+    }
+  } catch(e) { /* αν κάτι πάει στραβά, απλά δεν δείχνουμε το μπάνερ */ }
+})();
+</script>
 
 <!-- ============ NAVBAR ============ -->
 <header class="navbar">
