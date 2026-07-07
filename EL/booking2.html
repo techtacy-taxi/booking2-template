@@ -1,0 +1,2034 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Κράτηση Μεταφοράς</title>
+<meta name="theme-color" content="#0a192f">
+<meta name="robots" content="noindex">
+
+<!-- Favicons (ίδια με το site) -->
+<link rel="icon" type="image/jpeg" href="../logo.jpg">
+<link rel="apple-touch-icon" href="../logo.jpg">
+
+<!-- ============================================================
+     ΔΟΚΙΜΑΣΤΙΚΗ ΦΟΡΜΑ ΜΕΤΑΦΟΡΑΣ — booking.html
+     Στατική σελίδα φόρμας κράτησης (template).
+     Στέλνει POST στο Cloud Function submitPublicBooking, που:
+       • γράφει τη δουλειά στο saved_jobs (origin:'public_form')
+       • στέλνει email + .ics στον master
+       • ειδοποιεί τον master (FCM type 'public_booking')
+     ΦΑΣΗ 1: τιμή = 0 (την βάζει ο master). Το «Εκτιμώμενο κόστος»
+     δείχνει 0,00€ ως ενδεικτικό.
+     ============================================================ -->
+
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+:root{
+  --primary-color:#ffd700;
+  --primary-hover:#e6c200;
+  --gold-gradient:linear-gradient(135deg,#ffd700 0%,#ffb400 50%,#ffd700 100%);
+  --dark-bg:#0a192f;
+  --dark-secondary:#112240;
+  --dark-tertiary:#1a2f4a;
+  --field-bg:#0f2138;
+  --field-border:#243a5a;
+  --text-light:#e6f1ff;
+  --text-muted:#8aa0c4;
+  --white:#fff;
+  --whatsapp:#25d366;
+  --font-main:'Outfit',sans-serif;
+  --radius-sm:9px;
+  --radius-md:14px;
+  color-scheme:light;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:var(--font-main);
+  background:var(--dark-bg);
+  color:var(--text-light);
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- NAVBAR (ίδιο πνεύμα με το site) ---------- */
+.navbar{
+  position:sticky;top:0;width:100%;
+  padding:16px 5%;
+  display:flex;justify-content:space-between;align-items:center;
+  z-index:1000;
+  background:rgba(10,25,47,0.97);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid rgba(255,215,0,0.08);
+}
+.logo{
+  font-size:1.8rem;font-weight:800;color:var(--white);
+  display:flex;align-items:center;gap:15px;text-decoration:none;
+}
+.brand-logo{height:50px;width:auto;object-fit:contain;border-radius:8px;}
+.logo-text{font-size:1.5rem;font-weight:800;}
+.logo-text span{color:var(--primary-color);}
+@media (max-width:620px){.brand-logo{height:40px;}.logo-text{font-size:1.15rem;}}
+.nav-actions{display:flex;align-items:center;gap:18px;}
+
+/* ---------- LANGUAGE SWITCHER (1:1 από το site) ---------- */
+.lang-switcher{position:relative;display:inline-block;}
+.dropbtn{
+  background-color:transparent;color:var(--white);
+  font-size:16px;font-weight:700;border:none;cursor:pointer;
+  display:flex !important;align-items:center !important;justify-content:center !important;
+  gap:10px !important;font-family:'Outfit',sans-serif;
+  transition:all .3s ease;padding:8px 0;min-width:auto;
+}
+.dropbtn img{border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.dropbtn i.fa-globe{font-size:18px;}
+.dropbtn i.fa-chevron-down{font-size:12px;}
+.lang-switcher:hover .dropbtn{color:var(--primary-color);transform:translateY(-2px) scale(1.05);}
+.dropdown-content{
+  display:none;position:absolute;right:-10px;top:calc(100% + 10px);
+  background:rgba(255,255,255,.98);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  min-width:260px;
+  box-shadow:0 15px 50px rgba(0,0,0,.25),0 0 0 1px rgba(255,215,0,.1);
+  z-index:1000;border-radius:var(--radius-md);
+  opacity:0;transform:translateY(15px) scale(.95);
+  transition:opacity .5s cubic-bezier(.16,1,.3,1),transform .5s cubic-bezier(.16,1,.3,1);
+  padding:8px;
+  border:1px solid rgba(255,215,0,.15);border-top:2px solid var(--primary-color);
+  grid-template-columns:1fr 1fr;gap:0;
+}
+.lang-switcher:not(:hover) .dropdown-content{display:none !important;}
+.lang-switcher:hover .dropdown-content{display:grid;opacity:1;transform:translateY(0) scale(1);}
+.lang-switcher::after{content:'';position:absolute;bottom:-15px;left:0;right:0;height:15px;background:transparent;z-index:999;display:none;}
+.lang-switcher:hover::after{display:block;}
+.dropdown-content a{
+  color:var(--dark-bg) !important;padding:8px 12px !important;text-decoration:none !important;
+  display:flex !important;align-items:center !important;justify-content:flex-start !important;
+  gap:8px !important;font-size:14px;font-weight:700;transition:all .25s ease;border-radius:7px;
+  opacity:0;  /* ξεκινούν αόρατα — εμφανίζονται μία-μία στο hover */
+}
+.dropdown-content a:hover{background:rgba(255,215,0,.18) !important;transform:translateX(3px);}
+/* Animation εισόδου γλωσσών (1:1 από το site) */
+.lang-switcher:hover .dropdown-content a{animation:langItemSlideIn .4s cubic-bezier(.16,1,.3,1) forwards;}
+.lang-switcher:hover .dropdown-content a:nth-child(1){animation-delay:.05s;}
+.lang-switcher:hover .dropdown-content a:nth-child(2){animation-delay:.05s;}
+.lang-switcher:hover .dropdown-content a:nth-child(3){animation-delay:.10s;}
+.lang-switcher:hover .dropdown-content a:nth-child(4){animation-delay:.10s;}
+.lang-switcher:hover .dropdown-content a:nth-child(5){animation-delay:.15s;}
+.lang-switcher:hover .dropdown-content a:nth-child(6){animation-delay:.15s;}
+.lang-switcher:hover .dropdown-content a:nth-child(7){animation-delay:.20s;}
+.lang-switcher:hover .dropdown-content a:nth-child(8){animation-delay:.20s;}
+.lang-switcher:hover .dropdown-content a:nth-child(9){animation-delay:.25s;}
+.lang-switcher:hover .dropdown-content a:nth-child(10){animation-delay:.25s;}
+.lang-switcher:hover .dropdown-content a:nth-child(11){animation-delay:.30s;}
+.lang-switcher:hover .dropdown-content a:nth-child(12){animation-delay:.30s;}
+.lang-switcher:hover .dropdown-content a:nth-child(13){animation-delay:.35s;}
+.lang-switcher:hover .dropdown-content a:nth-child(14){animation-delay:.35s;}
+@keyframes langItemSlideIn{
+  0%{opacity:0;transform:translateX(-12px);}
+  100%{opacity:1;transform:translateX(0);}
+}
+
+/* ---------- FORM CARD ---------- */
+.wrap{max-width:760px;margin:0 auto;padding:34px 18px calc(60px + env(safe-area-inset-bottom));}
+.intro{text-align:center;margin-bottom:26px;}
+.intro h1{font-size:1.9rem;font-weight:800;color:var(--white);margin-bottom:8px;}
+.intro h1 b{color:var(--primary-color);}
+.intro p{color:var(--text-muted);font-size:.98rem;}
+
+.card{
+  background:var(--dark-secondary);
+  border-radius:16px;overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.35);
+  border:1px solid rgba(255,215,0,.08);
+  animation:cardIn .6s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
+.card-head{
+  padding:20px 26px;border-bottom:2px solid var(--primary-color);
+  display:flex;align-items:center;gap:13px;background:var(--dark-bg);
+}
+.card-head .ic{
+  width:44px;height:44px;border-radius:11px;background:var(--gold-gradient);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.card-head .ic i{font-size:24px;color:var(--dark-bg);}
+.card-head h2{font-size:1.25rem;font-weight:700;color:var(--white);line-height:1.2;}
+.card-head .sub{color:var(--primary-color);font-size:.8rem;font-weight:600;}
+
+.card-body{padding:24px 26px 28px;}
+.col2{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+@media (max-width:620px){.col2{grid-template-columns:1fr;gap:16px;}}
+.colstack{display:flex;flex-direction:column;gap:15px;}
+
+.fld label{
+  color:#cdd6ee;font-size:.78rem;font-weight:600;
+  display:flex;align-items:center;gap:7px;margin-bottom:6px;
+}
+.fld label .li{color:var(--primary-color);font-size:14px;width:15px;text-align:center;}
+.fld label .opt{color:var(--text-muted);font-weight:400;}
+.fld input,.fld textarea{
+  width:100%;background:var(--field-bg);border:1px solid var(--field-border);
+  color:var(--white);border-radius:var(--radius-sm);padding:11px 13px;
+  font-size:.92rem;font-family:inherit;transition:border-color .2s ease,box-shadow .2s ease;
+}
+.fld input::placeholder,.fld textarea::placeholder{color:#6b7da0;}
+.fld input:focus,.fld textarea:focus{
+  outline:none;border-color:var(--primary-color);
+  box-shadow:0 0 0 3px rgba(255,215,0,.12);
+}
+.fld textarea{resize:vertical;min-height:70px;}
+
+.duo{display:flex;gap:11px;}
+.duo>div{flex:1;}
+
+/* Counters */
+.counter{background:var(--field-bg);border:1px solid var(--field-border);border-radius:var(--radius-sm);padding:10px 12px;}
+.counter .ct{color:#cdd6ee;font-size:.72rem;font-weight:600;margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+.counter .ct i{color:var(--primary-color);font-size:13px;}
+.counter .row{display:flex;align-items:center;justify-content:space-between;}
+.stp{width:28px;height:28px;border-radius:8px;background:var(--gold-gradient);display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;transition:transform .1s ease,filter .2s ease;}
+.stp:hover{filter:brightness(1.08);}
+.stp:active{transform:scale(.9);}
+.stp i{color:var(--dark-bg);font-size:14px;}
+.stp.dis{background:#26405e;cursor:default;filter:none;}
+.stp.dis i{color:#5d7393;}
+.cval{color:var(--white);font-size:1.15rem;font-weight:700;min-width:24px;text-align:center;}
+
+/* Vehicle */
+.veh-wrap{display:flex;gap:10px;}
+.veh{flex:1;text-align:center;padding:12px 0;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--field-border);background:var(--field-bg);transition:all .18s ease;}
+.veh i{font-size:20px;color:#cdd6ee;}
+.veh div{font-size:.78rem;color:#cdd6ee;margin-top:3px;font-weight:600;}
+.veh.sel{background:var(--gold-gradient);border-color:var(--primary-color);}
+.veh.sel i,.veh.sel div{color:var(--dark-bg);}
+.auto-hint{color:var(--primary-color);font-size:.66rem;font-weight:600;}
+
+.van-msg{margin-top:11px;background:var(--dark-tertiary);border:1px solid var(--whatsapp);border-radius:11px;padding:13px 15px;display:none;animation:fadeIn .3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+.van-msg p{color:#cdd6ee;font-size:.82rem;line-height:1.5;margin-bottom:10px;}
+.van-msg p b{color:var(--primary-color);}
+.wa-btn{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--whatsapp);color:#073b22;text-decoration:none;border-radius:9px;padding:11px;font-size:.9rem;font-weight:700;transition:filter .2s ease;}
+.wa-btn:hover{filter:brightness(1.06);}
+
+/* Price box */
+.price-box{margin-top:20px;background:var(--field-bg);border:1px dashed var(--primary-color);border-radius:12px;padding:15px 18px;display:flex;align-items:center;justify-content:space-between;}
+.price-box .pl{color:#cdd6ee;font-size:.78rem;font-weight:600;}
+.price-box .ps{color:var(--text-muted);font-size:.68rem;}
+.price-box .pv-row{display:flex;align-items:baseline;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+.price-box .pv-original{color:var(--text-muted);font-size:1.5rem;text-decoration:line-through;}
+.price-box .pv-discount{color:var(--whatsapp);background:rgba(37,211,102,.14);font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;}
+.price-box .pv{color:var(--primary-color);font-size:1.7rem;font-weight:800;}
+.price-box .pv-night{color:var(--text-muted);font-size:.68rem;font-weight:600;white-space:nowrap;}
+.price-footnote{color:var(--text-muted);font-size:.66rem;margin-top:6px;text-align:right;}
+.deposit-banner{margin-top:14px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.35);border-radius:12px;padding:12px 14px;display:flex;align-items:flex-start;gap:11px;}
+.deposit-banner i{color:var(--primary-color);font-size:18px;margin-top:2px;flex-shrink:0;}
+.deposit-banner .db-title{color:var(--white);font-weight:700;font-size:.85rem;margin-bottom:3px;}
+.deposit-banner .db-amt{color:var(--text-muted);font-size:.76rem;line-height:1.4;}
+.deposit-banner .db-amt b{color:var(--primary-color);}
+.viva-result-banner{max-width:760px;margin:18px auto 0;padding:18px 20px;border-radius:12px;font-size:.9rem;line-height:1.6;}
+.viva-result-banner.ok{background:rgba(37,211,102,.14);border:1px solid var(--whatsapp);color:#d7ffe6;}
+.viva-result-banner.fail{background:rgba(255,90,90,.12);border:1px solid #ff5a5a;color:#ffd9d9;}
+.viva-result-banner .vrb-title{font-weight:800;font-size:1.05rem;display:flex;align-items:center;gap:9px;margin-bottom:8px;}
+.viva-result-banner .vrb-row{display:flex;gap:8px;margin-top:3px;}
+.viva-result-banner .vrb-row .k{color:var(--text-muted);min-width:110px;flex-shrink:0;}
+.viva-modal-overlay{position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:20px;}
+.viva-modal-box{max-width:460px;width:100%;background:var(--dark-secondary);border-radius:16px;padding:26px 24px;box-shadow:0 20px 60px rgba(0,0,0,.5);text-align:center;}
+.viva-modal-box.ok{border:1px solid var(--whatsapp);}
+.viva-modal-box.fail{border:1px solid #ff5a5a;}
+.viva-modal-icon{font-size:46px;margin-bottom:14px;}
+.viva-modal-box.ok .viva-modal-icon{color:var(--whatsapp);}
+.viva-modal-box.fail .viva-modal-icon{color:#ff5a5a;}
+.viva-modal-title{font-size:1.2rem;font-weight:800;color:var(--white);margin-bottom:10px;}
+.viva-modal-text{font-size:.9rem;color:var(--text-muted);line-height:1.55;margin-bottom:20px;}
+.viva-modal-text b{color:var(--white);}
+.viva-modal-btn{display:inline-block;padding:12px 32px;border-radius:10px;font-weight:700;font-size:.95rem;cursor:pointer;border:none;}
+.viva-modal-box.ok .viva-modal-btn{background:var(--whatsapp);color:#06210f;}
+.viva-modal-box.fail .viva-modal-btn{background:#ff5a5a;color:#2a0505;}
+.pay-mode{display:flex;gap:8px;margin-top:12px;}
+.pay-mode button{flex:1;padding:10px 8px;border-radius:10px;border:1px solid var(--field-border);
+  background:transparent;color:var(--text-muted);font-size:.82rem;font-weight:700;cursor:pointer;
+  transition:all .15s;line-height:1.3;}
+.pay-mode button .pm-sub{display:block;font-weight:500;font-size:.72rem;opacity:.85;margin-top:2px;}
+.pay-mode button.sel{background:var(--primary-color);border-color:var(--primary-color);color:#241500;}
+.pay-mode button:not(.sel):hover{border-color:var(--primary-color);color:var(--white);}
+
+/* Scrollable time picker */
+.time-wrap{position:relative;}
+.time-scroll{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:40;max-height:220px;overflow-y:auto;background:var(--field-bg,#1a2438);border:1px solid var(--primary-color);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.4);-webkit-overflow-scrolling:touch;}
+.time-wrap.open .time-scroll{display:block;}
+.time-opt{padding:10px 14px;cursor:pointer;color:#e8edf7;font-size:.95rem;border-bottom:1px solid rgba(255,255,255,.05);}
+.time-opt:hover{background:rgba(255,183,0,.15);}
+.time-opt.sel{background:var(--primary-color);color:#1a2438;font-weight:700;}
+
+/* Submit */
+.submit{
+  margin-top:16px;width:100%;background:var(--gold-gradient);color:var(--dark-bg);
+  border:none;border-radius:12px;padding:16px;font-size:1.02rem;font-weight:800;cursor:pointer;
+  font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px;
+  transition:transform .12s ease,box-shadow .25s ease,filter .2s ease;
+  box-shadow:0 10px 30px -5px rgba(255,215,0,.3);
+}
+.submit:hover{filter:brightness(1.04);transform:translateY(-2px);box-shadow:0 14px 36px -6px rgba(255,215,0,.42);}
+.submit:active{transform:translateY(0) scale(.99);}
+.submit:disabled{filter:grayscale(.4);cursor:default;transform:none;}
+.submit.ok{background:#34c759;color:#fff;box-shadow:none;}
+.submit.err{background:#e24b4a;color:#fff;box-shadow:none;}
+
+.note{text-align:center;color:var(--text-muted);font-size:.74rem;margin-top:14px;line-height:1.5;}
+
+.foot{text-align:center;color:var(--text-muted);font-size:.78rem;padding:24px 18px 36px;}
+.foot a{color:var(--primary-color);text-decoration:none;}
+
+/* ---------- Route block: Από/Προς + εναλλαγή ---------- */
+.route-block{display:flex;flex-direction:column;}
+.input-with-map{position:relative;}
+.input-with-map input{padding-right:42px;}
+.map-btn{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:30px;height:30px;border:none;border-radius:7px;cursor:pointer;
+  background:rgba(255,215,0,.14);color:var(--primary-color);
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+  transition:background .2s ease;
+}
+.map-btn:hover{background:rgba(255,215,0,.28);}
+
+/* Κουμπί GPS «η τοποθεσία μου» — ΜΟΝΟ σε κινητό (κρύβεται από default) */
+.gps-btn{
+  position:absolute;right:42px;top:50%;transform:translateY(-50%);
+  width:30px;height:30px;border:none;border-radius:7px;cursor:pointer;
+  background:rgba(52,199,89,.16);color:#34c759;
+  display:none;align-items:center;justify-content:center;font-size:14px;
+  transition:background .2s ease;
+}
+.gps-btn:hover{background:rgba(52,199,89,.3);}
+.gps-btn.busy i{animation:spin360 .8s linear infinite;}
+@keyframes spin360{to{transform:rotate(360deg);}}
+/* Όταν το input έχει κουμπί χάρτη + GPS, αφήνουμε χώρο δεξιά */
+body.is-mobile .gps-btn{display:flex;}
+body.is-mobile .input-with-map input{padding-right:78px;}
+
+/* Κουμπί GPS μέσα στον χάρτη */
+.map-gps{
+  position:absolute;right:12px;bottom:12px;z-index:6;
+  width:42px;height:42px;border-radius:10px;border:none;cursor:pointer;
+  background:#fff;color:#1a73e8;font-size:18px;
+  display:none;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.3);
+}
+body.is-mobile .map-gps{display:flex;}
+.map-gps.busy i{animation:spin360 .8s linear infinite;}
+/* Σειρά εναλλαγής: γραμμή — κουμπί — γραμμή, σε δικό της χώρο */
+.swap-row{display:flex;align-items:center;gap:10px;margin:9px 0;}
+.swap-line{flex:1;height:1px;background:var(--field-border);}
+.swap-btn{
+  flex-shrink:0;
+  width:34px;height:34px;border-radius:50%;border:none;
+  background:var(--gold-gradient);color:var(--dark-bg);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+  box-shadow:0 2px 8px rgba(0,0,0,.3);
+  transition:transform .35s cubic-bezier(.16,1,.3,1),filter .2s ease;
+}
+.swap-btn:hover{filter:brightness(1.05);transform:scale(1.08);}
+.swap-btn.spin{transform:rotate(180deg);}
+
+/* ---------- Google Places autocomplete dropdown ---------- */
+.pac-container{
+  border-radius:10px;margin-top:4px;border:1px solid var(--field-border);
+  box-shadow:0 12px 36px rgba(0,0,0,.35);font-family:var(--font-main);
+  background:var(--dark-secondary);
+}
+.pac-item{padding:8px 12px;color:var(--text-light);border-top:1px solid rgba(255,255,255,.05);cursor:pointer;}
+.pac-item:hover{background:var(--dark-tertiary);}
+.pac-item-query{color:#fff;}
+.pac-matched{color:var(--primary-color);}
+.pac-icon{display:none;}
+
+/* ---------- Map modal ---------- */
+.map-modal{
+  position:fixed;inset:0;z-index:2000;display:none;
+  align-items:center;justify-content:center;padding:16px;
+  background:rgba(5,12,26,.72);backdrop-filter:blur(4px);
+}
+.map-modal.open{display:flex;animation:fadeIn .25s ease;}
+.map-box{
+  width:100%;max-width:560px;background:var(--dark-secondary);
+  border-radius:16px;overflow:hidden;border:1px solid rgba(255,215,0,.15);
+  box-shadow:0 24px 70px rgba(0,0,0,.5);
+  animation:cardIn .35s cubic-bezier(.16,1,.3,1) both;
+}
+.map-box-head{padding:14px 18px;border-bottom:2px solid var(--primary-color);background:var(--dark-bg);display:flex;align-items:center;gap:10px;}
+.map-box-head .t{color:#fff;font-weight:700;font-size:1rem;flex:1;}
+.map-box-head .x{background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;padding:4px;}
+.map-box-head .x:hover{color:#fff;}
+#mapCanvas{width:100%;height:340px;background:var(--dark-tertiary);}
+.map-pin-hint{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);
+  pointer-events:none;z-index:5;color:#ff3b30;font-size:34px;
+  filter:drop-shadow(0 3px 4px rgba(0,0,0,.4));
+}
+.map-box-foot{padding:12px 18px 16px;}
+.map-addr{color:var(--text-light);font-size:.85rem;min-height:20px;margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+.map-addr i{color:var(--primary-color);}
+.map-confirm{
+  width:100%;background:var(--gold-gradient);color:var(--dark-bg);border:none;
+  border-radius:10px;padding:13px;font-size:.95rem;font-weight:800;cursor:pointer;
+  font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.map-confirm:disabled{filter:grayscale(.5);cursor:default;}
+
+/* ---------- Country code picker (τηλέφωνο) ---------- */
+.phone-row{display:flex;gap:8px;}
+.cc-wrap{position:relative;flex-shrink:0;}
+.cc-btn{
+  height:100%;display:flex;align-items:center;gap:6px;cursor:pointer;
+  background:var(--field-bg);border:1px solid var(--field-border);
+  color:#fff;border-radius:var(--radius-sm);padding:0 11px;font-size:.92rem;
+  font-family:inherit;white-space:nowrap;min-height:43px;
+}
+.cc-btn:hover{border-color:var(--primary-color);}
+.cc-btn .flag{width:22px;height:auto;border-radius:3px;display:block;}
+.cc-btn .chev{font-size:10px;color:var(--text-muted);}
+.cc-list{
+  position:absolute;left:0;top:calc(100% + 4px);z-index:60;
+  width:280px;max-height:280px;overflow-y:auto;
+  background:var(--dark-secondary);border:1px solid var(--field-border);
+  border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.4);display:none;
+}
+.cc-list.open{display:block;animation:fadeIn .15s ease;}
+.cc-search{position:sticky;top:0;background:var(--dark-secondary);padding:8px;border-bottom:1px solid var(--field-border);}
+.cc-search input{width:100%;box-sizing:border-box;background:var(--field-bg);border:1px solid var(--field-border);color:#fff;border-radius:7px;padding:8px 10px;font-size:.85rem;font-family:inherit;}
+.cc-item{padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;border-top:1px solid rgba(255,255,255,.04);font-size:.88rem;color:#fff;}
+.cc-item:hover{background:var(--dark-tertiary);}
+.cc-item .flag{width:22px;height:auto;border-radius:3px;}
+.cc-item .nm{flex:1;color:#cdd6ee;}
+.cc-item .dc{color:var(--primary-color);font-weight:600;}
+.phone-row input{flex:1;}
+
+/* ---------- Custom autocomplete dropdown (Places API New) ---------- */
+.ac-wrap{position:relative;}
+.ac-list{
+  position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:50;
+  background:var(--dark-secondary);border:1px solid var(--field-border);
+  border-radius:10px;box-shadow:0 12px 36px rgba(0,0,0,.4);
+  overflow:hidden;display:none;
+}
+.ac-list.open{display:block;animation:fadeIn .15s ease;}
+.ac-item{
+  padding:10px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px;
+  border-top:1px solid rgba(255,255,255,.05);transition:background .15s ease;
+}
+.ac-item:first-child{border-top:none;}
+.ac-item:hover,.ac-item.active{background:var(--dark-tertiary);}
+.ac-item i{color:var(--primary-color);font-size:13px;margin-top:3px;flex-shrink:0;}
+.ac-item .ac-main{color:#fff;font-size:.88rem;line-height:1.3;}
+.ac-item .ac-sub{color:var(--text-muted);font-size:.74rem;}
+</style>
+</head>
+<body>
+
+<!-- ============ NAVBAR ============ -->
+<header class="navbar">
+  <div class="logo">
+    <img src="../logo.jpg" alt="Logo Taxi & Van Transfers" class="brand-logo" id="brandLogo">
+    <div class="logo-text">Taxi <span>&amp; Van Transfers</span></div>
+  </div>
+  <div class="nav-actions">
+    <!-- Language switcher: ίδιος με το site. ΦΑΣΗ 1: τα links δεν οδηγούν
+         κάπου ακόμη (href="#") — όταν μεταφραστεί η σελίδα στις 14 γλώσσες,
+         βάζουμε τα κανονικά paths (de/booking.html κ.λπ.). -->
+    <a href="../index.html" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Switch to English">
+      <img src="https://flagcdn.com/w20/gb.png" width="18"> EN
+    </a>
+  </div>
+</header>
+
+<!-- ============ FORM ============ -->
+<div class="wrap">
+  <div class="intro">
+    <h1>Κράτηση <b>μεταφοράς</b></h1>
+    <p>Συμπληρώστε τα στοιχεία της διαδρομής και θα επικοινωνήσουμε για επιβεβαίωση.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="ic"><i class="fas fa-car"></i></div>
+      <div>
+        <h2>Στοιχεία διαδρομής</h2>
+        <div class="sub">Γρήγορη &amp; εύκολη online κράτηση</div>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <div class="col2">
+
+        <!-- ΑΡΙΣΤΕΡΑ: διαδρομή / χρόνος / πλήθος / όχημα -->
+        <div class="colstack">
+          <div class="route-block">
+            <div class="fld">
+              <label><i class="fas fa-dot-circle li"></i>Από</label>
+              <div class="ac-wrap">
+                <div class="input-with-map">
+                  <input type="text" id="from" placeholder="π.χ. Αεροδρόμιο Ελ. Βενιζέλος" autocomplete="off">
+                  <button type="button" class="gps-btn" data-target="from" title="Η τοποθεσία μου"><i class="fas fa-location-crosshairs"></i></button>
+                  <button type="button" class="map-btn" data-target="from" title="Επιλογή στον χάρτη"><i class="fas fa-map-marker-alt"></i></button>
+                </div>
+                <div class="ac-list" id="ac-from"></div>
+              </div>
+            </div>
+
+            <div class="swap-row">
+              <span class="swap-line"></span>
+              <button type="button" id="swapBtn" class="swap-btn" title="Εναλλαγή Από/Προς">
+                <i class="fas fa-exchange-alt"></i>
+              </button>
+              <span class="swap-line"></span>
+            </div>
+
+            <div class="fld">
+              <label><i class="fas fa-map-marker-alt li" style="color:#ff5a5a;"></i>Προς</label>
+              <div class="ac-wrap">
+                <div class="input-with-map">
+                  <input type="text" id="to" placeholder="π.χ. Σύνταγμα, Αθήνα" autocomplete="off">
+                  <button type="button" class="gps-btn" data-target="to" title="Η τοποθεσία μου"><i class="fas fa-location-crosshairs"></i></button>
+                  <button type="button" class="map-btn" data-target="to" title="Επιλογή στον χάρτη"><i class="fas fa-map-marker-alt"></i></button>
+                </div>
+                <div class="ac-list" id="ac-to"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="routeMapWrap" style="display:none;">
+            <div id="routeMapBox" style="border-radius:12px;overflow:hidden;position:relative;height:170px;background:#12213d;margin-top:2px;">
+              <div id="routeMap" style="width:100%;height:100%;"></div>
+              <div id="routeMapEta" style="position:absolute;top:8px;right:8px;background:#fff;color:#1b2f52;font-size:11px;font-weight:700;padding:4px 9px;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.25);"></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <div style="flex:1;background:var(--dark-secondary);border:1px solid var(--field-border);border-radius:10px;padding:9px 8px;text-align:center;">
+                <div style="color:#4a90d9;font-size:15px;margin-bottom:2px;"><i class="fas fa-road"></i></div>
+                <div id="routeDistanceVal" style="color:var(--white);font-size:13px;font-weight:700;">—</div>
+                <div style="color:var(--text-muted);font-size:9.5px;">Διαδρομή</div>
+              </div>
+              <div style="flex:1;background:var(--dark-secondary);border:1px solid var(--field-border);border-radius:10px;padding:9px 8px;text-align:center;">
+                <div style="color:var(--primary-color);font-size:15px;margin-bottom:2px;"><i class="fas fa-clock"></i></div>
+                <div id="routeDurationVal" style="color:var(--white);font-size:13px;font-weight:700;">—</div>
+                <div id="routeDurationLabel" style="color:var(--text-muted);font-size:9.5px;">Ώρα ραντεβού</div>
+              </div>
+            </div>
+          </div>
+          <div class="duo">
+            <div class="fld"><label><i class="far fa-calendar li"></i>Ημερομηνία</label><input type="date" id="date"></div>
+            <div class="fld"><label><i class="far fa-clock li"></i>Ώρα</label>
+              <div class="time-wrap">
+                <input type="text" id="time" readonly placeholder="Επιλέξτε ώρα" autocomplete="off">
+                <div class="time-scroll" id="timeScroll"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="duo">
+            <div class="counter">
+              <div class="ct"><i class="fas fa-users"></i> Άτομα</div>
+              <div class="row">
+                <span class="stp" data-t="persons" data-d="-1"><i class="fas fa-minus"></i></span>
+                <span class="cval" id="v-persons">2</span>
+                <span class="stp" data-t="persons" data-d="1"><i class="fas fa-plus"></i></span>
+              </div>
+            </div>
+            <div class="counter">
+              <div class="ct"><i class="fas fa-suitcase-rolling"></i> Βαλίτσες</div>
+              <div class="row">
+                <span class="stp" data-t="luggage" data-d="-1"><i class="fas fa-minus"></i></span>
+                <span class="cval" id="v-luggage">2</span>
+                <span class="stp" data-t="luggage" data-d="1"><i class="fas fa-plus"></i></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ΔΕΞΙΑ: στοιχεία πελάτη -->
+        <div class="colstack">
+          <div class="counter">
+            <div class="ct"><i class="fas fa-baby"></i> Παιδικά καθίσματα</div>
+            <div class="row">
+              <span class="stp" data-t="seats" data-d="-1"><i class="fas fa-minus"></i></span>
+              <span class="cval" id="v-seats">0</span>
+              <span class="stp" data-t="seats" data-d="1"><i class="fas fa-plus"></i></span>
+            </div>
+          </div>
+
+          <div class="fld">
+            <label style="margin-bottom:7px;">Τύπος οχήματος <span class="auto-hint" id="autoHint"></span></label>
+            <div class="veh-wrap">
+              <div class="veh sel" id="vehTaxi"><i class="fas fa-car"></i><div>Ταξί / Sedan</div></div>
+              <div class="veh" id="vehVan"><i class="fas fa-shuttle-van"></i><div>Βαν</div></div>
+            </div>
+          </div>
+
+          <div class="fld"><label><i class="fas fa-user li"></i>Ονοματεπώνυμο</label><input type="text" id="name" placeholder="Το όνομά σας" autocomplete="name"></div>
+          <div class="fld">
+            <label><i class="fas fa-phone li"></i>Τηλέφωνο</label>
+            <div class="phone-row">
+              <div class="cc-wrap">
+                <div class="cc-btn" id="ccBtn">
+                  <img class="flag" id="ccFlag" src="https://flagcdn.com/w40/gr.png" width="22" alt="GR">
+                  <span id="ccCode">+30</span>
+                  <span class="chev"><i class="fas fa-chevron-down"></i></span>
+                </div>
+                <div class="cc-list" id="ccList">
+                  <div class="cc-search"><input type="text" id="ccSearch" placeholder="Αναζήτηση χώρας…"></div>
+                  <div id="ccItems"></div>
+                </div>
+              </div>
+              <input type="tel" id="phone" placeholder="6912345678" autocomplete="tel">
+            </div>
+          </div>
+          <div class="fld"><label><i class="fas fa-envelope li"></i>Email</label><input type="email" id="email" placeholder="name@email.com" autocomplete="email"></div>
+          <div class="fld">
+            <label><i class="fas fa-plane li"></i>Πτήση / Πλοίο</label>
+            <input type="text" id="flight" placeholder="π.χ. A3 712">
+            <div style="color:var(--text-muted);font-size:.72rem;margin-top:5px;line-height:1.4;">
+              Αν δεν μας δώσετε πτήση/πλοίο δεν μπορούμε να εξυπηρετήσουμε. Αν δεν χρησιμοποιείτε κάτι, γράψτε <b style="color:var(--primary-color);">0</b>.
+            </div>
+          </div>
+          <div class="fld"><label><i class="fas fa-comment-dots li"></i>Σχόλια <span class="opt">(προαιρετικό)</span></label><textarea id="note" placeholder="Επιπλέον πληροφορίες για τον οδηγό…"></textarea></div>
+        </div>
+
+      </div>
+
+      <div class="price-box">
+        <div>
+          <div class="pl">Εκτιμώμενο κόστος</div>
+          <div class="ps">ενδεικτικό · θα επιβεβαιωθεί από τον πάροχο</div>
+        </div>
+        <div>
+          <div class="pv-row">
+            <span class="pv-original" id="priceOriginal" style="display:none;"></span>
+            <span class="pv-discount" id="priceDiscountLabel" style="display:none;"></span>
+            <div class="pv" id="priceView">0,00 €</div>
+            <div class="pv-night" id="priceNightLabel" style="display:none;">Νυχτερινός τιμοκατάλογος *</div>
+          </div>
+        </div>
+      </div>
+      <div class="price-footnote" id="minChargeNote" style="display:none;">Είναι η μικρότερη τιμή για δέσμευση οχήματος.</div>
+      <div class="price-footnote" id="priceFootnote" style="display:none;">* Ισχύει το νυχτερινό τιμολόγιο (23:30–05:30), όπως ορίζει η κυβέρνηση.</div>
+
+      <div class="deposit-banner" id="depositBanner">
+        <i class="fas fa-shield-halved"></i>
+        <div style="flex:1;">
+          <div class="db-title" id="depositTitle">Για την κράτηση απαιτείται προκαταβολή 10%</div>
+          <div class="db-amt" id="depositAmtLine">Θα πληρώσετε τώρα <b id="depositAmt">0,00 €</b> μέσω ασφαλούς πληρωμής (Viva) — το υπόλοιπο στον οδηγό.</div>
+          <div class="pay-mode">
+            <button type="button" class="sel" id="payModeDeposit" data-mode="deposit">Προκαταβολή 10%
+              <span class="pm-sub">το υπόλοιπο στον οδηγό</span></button>
+            <button type="button" id="payModeFull" data-mode="full">Πλήρης πληρωμή
+              <span class="pm-sub">τίποτα άλλο να πληρώσετε</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="actionArea">
+        <button class="submit" id="sendBtn" type="button"><i class="fas fa-credit-card"></i> Πληρωμή προκαταβολής &amp; αποστολή</button>
+        <div class="note" id="payNote">Θα μεταφερθείτε στη σελίδα ασφαλούς πληρωμής (Viva). Η κράτηση οριστικοποιείται μόνο μετά την επιτυχή πληρωμή.</div>
+        <div class="note" style="margin-top:6px;">Πατώντας το κουμπί αποδέχεστε τους <a href="terms.html" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">Όρους &amp; Προϋποθέσεις</a> και την <a href="privacy-policy.html" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">Πολιτική Απορρήτου</a>.</div>
+      </div>
+      <div class="van-msg" id="waArea" style="display:none;">
+        <p id="waReasonText">Η κράτηση δεν μπορεί να σταλεί αυτόματα — επικοινωνήστε μαζί μας.</p>
+        <a class="wa-btn" id="waLink" href="#" target="_blank" rel="noopener"><i class="fab fa-whatsapp" style="font-size:18px;"></i> Επικοινωνία στο WhatsApp</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MAP MODAL (πινέζα → διεύθυνση) ============ -->
+<div class="map-modal" id="mapModal">
+  <div class="map-box">
+    <div class="map-box-head">
+      <i class="fas fa-map-marked-alt" style="color:var(--primary-color);"></i>
+      <span class="t" id="mapTitle">Επιλογή σημείου</span>
+      <button type="button" class="x" id="mapClose"><i class="fas fa-times"></i></button>
+    </div>
+    <div style="position:relative;">
+      <div id="mapCanvas"></div>
+      <i class="fas fa-map-marker-alt map-pin-hint"></i>
+      <button type="button" class="map-gps" id="mapGps" title="Η τοποθεσία μου"><i class="fas fa-location-crosshairs"></i></button>
+    </div>
+    <div class="map-box-foot">
+      <div class="map-addr" id="mapAddr"><i class="fas fa-location-dot"></i> <span>Μετακινήστε τον χάρτη…</span></div>
+      <button type="button" class="map-confirm" id="mapConfirm" disabled><i class="fas fa-check"></i> Επιβεβαίωση διεύθυνσης</button>
+    </div>
+  </div>
+</div>
+
+<div class="foot">© <!-- ⚠️ ΒΑΛΕ ΕΔΩ το όνομα της επιχείρησής σου --> Το Όνομα Της Επιχείρησής Σου</div>
+
+<script>
+/* ====== ΑΝΙΧΝΕΥΣΗ ΚΙΝΗΤΟΥ (για το κουμπί GPS) ====== */
+// Κινητό = touch + στενή οθόνη + δεν είναι fine pointer (ποντίκι).
+const IS_MOBILE = (() => {
+  const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  const narrow = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
+  const touch  = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const uaMob  = /Android|iPhone|iPad|iPod|Mobile|Opera Mini|IEMobile/i.test(navigator.userAgent);
+  return (touch && (coarse || narrow)) || uaMob;
+})();
+if (IS_MOBILE) document.body.classList.add('is-mobile');
+
+/* ====== ΡΥΘΜΙΣΕΙΣ ====== */
+/* Το endpoint του Cloud Function. region: us-central1 (callables σου).
+   Αν αλλάξει, ενημέρωσε ΜΟΝΟ αυτή τη γραμμή. */
+const ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/submitPublicBooking";
+const ESTIMATE_ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/estimatePrice";
+const CLIENTS_ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/listClients";
+const VIVA_ORDER_ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/createVivaOrder";
+
+/* ── Multi-tenant (Φάση 4) ─────────────────────────────────────────────────
+   ΜΟΝΟ αυτή η γραμμή αλλάζει ανάμεσα σε booking.html (εσένα) και σε κάθε
+   νέο booking2.html/booking3.html κλπ. (άλλου πελάτη). Ο server (index.js)
+   διαβάζει αυτό το tenantId για να φορτώσει τις σωστές ζώνες/τιμές/Viva
+   credentials του κάθε πελάτη — βλ. Cloud Functions Φάση 3.
+   Ο δικός σου λογαριασμός ΠΑΝΤΑ "default". */
+const EFORM_ID = "CHANGE_ME_EFORM_ID"; // ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο tenantId που έδωσες στο createTenant (π.χ. "rhodes_taxi")
+
+/* Όρια οχήματος (συμφωνημένη λογική) */
+const PERSON_VAN_THRESHOLD  = 5;  // άτομα >= 5 -> Βαν
+const LUGGAGE_VAN_THRESHOLD = 5;  // βαλίτσες >= 5 -> Βαν
+
+const MAX = { persons:50, luggage:12, seats:4 };
+const MIN = { persons:1, luggage:0,  seats:0 };
+
+const state = { persons:2, luggage:2, seats:0, veh:'taxi', autoVan:false,
+  fromLat:null, fromLng:null, toLat:null, toLng:null,
+  dialCode:'+30', country:'GR', payFull:false };
+
+/* ---- Counters ---- */
+function clampStep(t,d){
+  const nv = state[t] + d;
+  state[t] = Math.max(MIN[t], Math.min(MAX[t], nv));
+}
+function recomputeVehicle(){
+  const wasAuto = state.autoVan;
+  state.autoVan = (state.persons >= PERSON_VAN_THRESHOLD ||
+                   state.luggage >= LUGGAGE_VAN_THRESHOLD);
+  if (state.autoVan){
+    state.veh = 'van';                 // κλειδώνει σε Βαν
+  } else if (wasAuto && !state.autoVan){
+    state.veh = 'taxi';                // έπεσε κάτω από το όριο -> ξανά Ταξί
+  }
+}
+function render(){
+  for (const t of ['persons','luggage','seats']){
+    document.getElementById('v-'+t).textContent = state[t];
+  }
+  // disable στα steppers στα όρια
+  document.querySelectorAll('.stp').forEach(b=>{
+    const t=b.dataset.t, d=parseInt(b.dataset.d,10);
+    const atMax = d>0 && state[t]>=MAX[t];
+    const atMin = d<0 && state[t]<=MIN[t];
+    b.classList.toggle('dis', atMax||atMin);
+  });
+  document.getElementById('vehTaxi').classList.toggle('sel', state.veh==='taxi');
+  document.getElementById('vehVan').classList.toggle('sel', state.veh==='van');
+  document.getElementById('autoHint').textContent = state.autoVan ? '· προτείνεται Βαν' : '';
+  scheduleEstimate();
+}
+
+document.querySelectorAll('.stp').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    if (b.classList.contains('dis')) return;
+    clampStep(b.dataset.t, parseInt(b.dataset.d,10));
+    recomputeVehicle();
+    render();
+  });
+});
+
+document.getElementById('vehTaxi').addEventListener('click', ()=>{
+  if (state.autoVan) return;   // κλειδωμένο σε Βαν — βλ. actionArea/waArea
+  state.veh='taxi'; render();
+});
+document.getElementById('vehVan').addEventListener('click', ()=>{
+  state.veh='van'; render();
+});
+
+document.getElementById('payModeDeposit').addEventListener('click', ()=>{
+  state.payFull = false;
+  document.getElementById('payModeDeposit').classList.add('sel');
+  document.getElementById('payModeFull').classList.remove('sel');
+  renderPrice();
+});
+document.getElementById('payModeFull').addEventListener('click', ()=>{
+  state.payFull = true;
+  document.getElementById('payModeFull').classList.add('sel');
+  document.getElementById('payModeDeposit').classList.remove('sel');
+  renderPrice();
+});
+
+/* ---- Ζωντανή εκτίμηση τιμής (ζώνες/δυναμικός τύπος/νυχτερινό/μπλάκαουτ) ---- */
+let lastEstimate = { price:0, nightApplies:false, blocked:false, reasons:[],
+  displayOriginal:0, discountPercent:8, minChargeApplied:false,
+  distanceKm:0, durationMin:0, routePolyline:null };
+let estimateDebounce=null, estimateSeq=0;
+let _lastRouteSig = null; // cache: αλλαγή μόνο ημερομηνίας/ώρας δεν ξαναφέρνει Routes API
+
+function fmtEUR(v){ return Math.max(0, v).toFixed(2).replace('.', ',') + ' €'; }
+
+function scheduleEstimate(){
+  if (estimateDebounce) clearTimeout(estimateDebounce);
+  estimateDebounce = setTimeout(fetchEstimate, 400);
+}
+
+async function fetchEstimate(){
+  const data = gather();
+  if (data.fromLat==null || data.fromLng==null || data.toLat==null || data.toLng==null){
+    lastEstimate = { price:0, nightApplies:false, blocked:false, reasons:[],
+      displayOriginal:0, discountPercent:8, minChargeApplied:false,
+      distanceKm:0, durationMin:0, routePolyline:null };
+    _lastRouteSig = null;
+    renderPrice();
+    return;
+  }
+  const mySeq = ++estimateSeq;
+
+  // ── Cache διαδρομής: αν το Από/Προς/όχημα ΔΕΝ άλλαξε από την προηγούμενη
+  // φορά (μόνο ημερομηνία/ώρα/άτομα/βαλίτσες άλλαξαν), ΔΕΝ χρειάζεται νέα
+  // κλήση Routes API — στέλνουμε στον server τα ήδη υπολογισμένα km/λεπτά/
+  // polyline και τα ξαναχρησιμοποιεί αντί να ρωτήσει ξανά τη Google.
+  const routeSig = [data.fromLat,data.fromLng,data.toLat,data.toLng,data.vehicleType].join('|');
+  const sameRoute = routeSig === _lastRouteSig;
+
+  // ── Ο χάρτης/απόσταση εμφανίζεται μόνο αφού μπει Ονοματεπώνυμο — σαφής
+  // ένδειξη ότι ο πελάτης προχωράει πραγματικά σε κράτηση, όχι απλή δοκιμή.
+  const nameFilled = !!document.getElementById('name').value.trim();
+
+  try{
+    const res = await fetch(ESTIMATE_ENDPOINT, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        tenantId: EFORM_ID,
+        fromLat:data.fromLat, fromLng:data.fromLng, toLat:data.toLat, toLng:data.toLng,
+        persons:data.persons, luggage:data.luggage, childSeatCount:data.childSeatCount,
+        vehicleType:data.vehicleType, lang:data.lang, dialCode:state.dialCode,
+        date:data.date, time:data.time,
+        needMap: nameFilled,
+        ...(sameRoute ? {
+          cachedDistanceKm:   lastEstimate.distanceKm,
+          cachedDurationMin:  lastEstimate.durationMin,
+          cachedRoutePolyline: lastEstimate.routePolyline,
+        } : {}),
+      }),
+    });
+    if (mySeq !== estimateSeq) return;   // ξεπερασμένη απάντηση (ο χρήστης άλλαξε κάτι στο μεταξύ)
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || 'estimate_error');
+    lastEstimate = { price:j.price||0, nightApplies:!!j.nightApplies, blocked:!!j.blocked, reasons:j.reasons||[],
+      displayOriginal:j.displayOriginal||0, discountPercent:j.discountPercent||8, minChargeApplied:!!j.minChargeApplied,
+      distanceKm:j.distanceKm||0, durationMin:j.durationMin||0, routePolyline:j.routePolyline||null };
+    if (state.persons > 8){
+      lastEstimate.blocked = true;
+      lastEstimate.reasons = ['van_capacity', ...lastEstimate.reasons.filter(r => r !== 'van_capacity')];
+    }
+    if (j.distanceKm > 0) _lastRouteSig = routeSig; // κρατάμε το route sig ΜΟΝΟ αν όντως πήραμε δεδομένα
+  }catch(e){
+    console.error('estimate error:', e);
+  }
+  renderPrice();
+}
+
+/* ---- Μίνι χάρτης + απόσταση + χρόνος (για την ώρα ραντεβού) ---- */
+let _routeMap = null, _routeMarkerFrom = null, _routeMarkerTo = null, _routePolylineObj = null;
+
+function fmtMinutes(min){
+  const m = Math.round(min);
+  if (m < 60) return m + ' λεπτά';
+  const h = Math.floor(m/60), r = m%60;
+  return h + 'ω ' + (r ? r+'λ' : '');
+}
+
+function renderRouteMap(){
+  const wrap = document.getElementById('routeMapWrap');
+  const nameFilled = !!document.getElementById('name').value.trim();
+  const hasRoute = nameFilled &&
+                   state.fromLat!=null && state.fromLng!=null &&
+                   state.toLat!=null   && state.toLng!=null   &&
+                   lastEstimate.distanceKm > 0;
+  if (!hasRoute || typeof google === 'undefined' || !google.maps){
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'block';
+
+  document.getElementById('routeDistanceVal').textContent = lastEstimate.distanceKm.toFixed(1) + ' χλμ';
+  document.getElementById('routeDurationVal').textContent = lastEstimate.durationMin > 0 ? fmtMinutes(lastEstimate.durationMin) : '—';
+  document.getElementById('routeDurationLabel').textContent = document.getElementById('date').value && document.getElementById('time').value
+    ? 'Χρόνος (ώρα ραντεβού)' : 'Χρόνος (τώρα)';
+  document.getElementById('routeMapEta').textContent = lastEstimate.durationMin > 0 ? fmtMinutes(lastEstimate.durationMin) : '';
+
+  const from = { lat: state.fromLat, lng: state.fromLng };
+  const to   = { lat: state.toLat,   lng: state.toLng };
+
+  if (!_routeMap){
+    _routeMap = new google.maps.Map(document.getElementById('routeMap'), {
+      center: from, zoom: 12, disableDefaultUI: true, gestureHandling: 'cooperative',
+    });
+    _routeMarkerFrom = new google.maps.Marker({ map: _routeMap, position: from,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#34d399', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 } });
+    _routeMarkerTo = new google.maps.Marker({ map: _routeMap, position: to,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#f87171', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 } });
+    _routePolylineObj = new google.maps.Polyline({ map: _routeMap, strokeColor: '#4a90d9', strokeWeight: 4, strokeOpacity: .9 });
+  } else {
+    _routeMarkerFrom.setPosition(from);
+    _routeMarkerTo.setPosition(to);
+  }
+
+  let path;
+  if (lastEstimate.routePolyline && google.maps.geometry && google.maps.geometry.encoding){
+    try{ path = google.maps.geometry.encoding.decodePath(lastEstimate.routePolyline); }catch(e){ path = [from, to]; }
+  } else {
+    path = [from, to];
+  }
+  _routePolylineObj.setPath(path);
+
+  const bounds = new google.maps.LatLngBounds();
+  path.forEach(p => bounds.extend(p));
+  bounds.extend(from); bounds.extend(to);
+  _routeMap.fitBounds(bounds, 28);
+}
+
+function reasonLabel(code){
+  if (code==='blackout')       return 'Εκτός ωραρίου φόρμας για αυτή την ώρα';
+  if (code==='lead_time')      return 'Λιγότερο από 2 ώρες προθεσμία';
+  if (code==='large_order')    return 'Μεγάλη παραγγελία — χρειάζεται προσωπική επιβεβαίωση';
+  if (code==='outside_attica') return 'Διαδρομή εκτός Αττικής — χρειάζεται προσωπική επιβεβαίωση';
+  if (code==='van_capacity')   return 'Πάνω από 8 άτομα — το Βαν παίρνει μέχρι 8, χρειάζεται Mini Bus. Επικοινωνήστε μαζί μας';
+  return 'Χρειάζεται προσωπική επιβεβαίωση';
+}
+
+function buildWhatsAppMessage(){
+  const data = gather();
+  const lines = [
+    'Νέο αίτημα κράτησης (εκτός φόρμας)',
+    'Από: '   + (data.from || '-'),
+    'Προς: '  + (data.to   || '-'),
+    'Ημερομηνία/ώρα: ' + (data.date||'-') + ' ' + (data.time||'-'),
+    'Άτομα: '            + data.persons,
+    'Βαλίτσες: '         + data.luggage,
+    'Παιδικά καθίσματα: '+ data.childSeatCount,
+    'Όχημα: ' + (data.vehicleType==='van' ? 'Βαν' : 'Ταξί / Sedan'),
+    'Όνομα: '     + (data.name  || '-'),
+    'Τηλέφωνο: '  + (data.phone || '-'),
+    'Εκτιμώμενη τιμή: ' + fmtEUR(lastEstimate.price),
+    'Λόγος: ' + (lastEstimate.reasons.map(reasonLabel).join(' · ') || '-'),
+  ];
+  if (data.persons > 8){
+    lines.push('', '⚠️ Χρειάζεται MINI BUS (το Βαν παίρνει μέχρι 8 άτομα) — παρακαλώ επικοινωνήστε μαζί μου για διαθεσιμότητα/τιμή.');
+  }
+  return lines.join('\n');
+}
+
+function renderPrice(){
+  document.getElementById('priceView').textContent = fmtEUR(lastEstimate.price);
+
+  const showDiscount = lastEstimate.displayOriginal > lastEstimate.price && lastEstimate.price > 0;
+  document.getElementById('priceOriginal').style.display = showDiscount ? 'inline' : 'none';
+  document.getElementById('priceOriginal').textContent   = showDiscount ? fmtEUR(lastEstimate.displayOriginal) : '';
+  document.getElementById('priceDiscountLabel').style.display = showDiscount ? 'inline' : 'none';
+  document.getElementById('priceDiscountLabel').textContent   = showDiscount
+    ? ('Έκπτωση γνωριμίας ' + lastEstimate.discountPercent + '%') : '';
+
+  document.getElementById('priceNightLabel').style.display = lastEstimate.nightApplies ? 'inline' : 'none';
+  document.getElementById('priceFootnote').style.display   = lastEstimate.nightApplies ? 'block'  : 'none';
+  document.getElementById('minChargeNote').style.display   = lastEstimate.minChargeApplied ? 'block' : 'none';
+
+  const blocked = lastEstimate.blocked;
+  document.getElementById('actionArea').style.display = blocked ? 'none'  : 'block';
+  document.getElementById('depositBanner').style.display = blocked ? 'none' : 'flex';
+  document.getElementById('waArea').style.display      = blocked ? 'block' : 'none';
+  if (blocked){
+    document.getElementById('waReasonText').textContent = reasonLabel(lastEstimate.reasons[0]) + '.';
+    const msg = buildWhatsAppMessage();
+    document.getElementById('waLink').href = 'https://wa.me/' + (_tenantWhatsappNumber || 'YOUR_WHATSAPP_NUMBER') + '?text=' + encodeURIComponent(msg);
+  }
+
+  // Ενδεικτικό ποσό πληρωμής — 10% (στρογγυλοποίηση πάνω στο επόμενο ευρώ)
+  // ή ολόκληρο το ποσό, ανάλογα με την επιλογή του πελάτη (state.payFull).
+  // Ο server (createVivaOrder) ξαναϋπολογίζει το επίσημο ποσό ούτως ή άλλως.
+  const depositEur = lastEstimate.price > 0 ? Math.ceil(lastEstimate.price * 0.10) : 0;
+  const fullEur    = lastEstimate.price > 0 ? Math.ceil(lastEstimate.price) : 0;
+  const payAmt = state.payFull ? fullEur : depositEur;
+  document.getElementById('depositTitle').textContent = state.payFull
+    ? 'Πληρωμή ολόκληρου ποσού'
+    : 'Για την κράτηση απαιτείται προκαταβολή 10%';
+  document.getElementById('depositAmtLine').innerHTML = state.payFull
+    ? 'Θα πληρώσετε τώρα <b id="depositAmt">' + fmtEUR(payAmt) + '</b> μέσω ασφαλούς πληρωμής (Viva) — τίποτα άλλο στον οδηγό.'
+    : 'Θα πληρώσετε τώρα <b id="depositAmt">' + fmtEUR(payAmt) + '</b> μέσω ασφαλούς πληρωμής (Viva) — το υπόλοιπο στον οδηγό.';
+  if (!btn.disabled){
+    setBtn('', '<i class="fas fa-credit-card"></i> ' + (state.payFull ? 'Πληρωμή ολόκληρου ποσού &amp; αποστολή' : 'Πληρωμή προκαταβολής &amp; αποστολή'));
+  }
+  renderRouteMap();
+}
+
+/* ---- Submit ---- */
+const btn = document.getElementById('sendBtn');
+
+function gather(){
+  const rawPhone = document.getElementById('phone').value.trim();
+  return {
+    from:    document.getElementById('from').value.trim(),
+    to:      document.getElementById('to').value.trim(),
+    fromLat: state.fromLat, fromLng: state.fromLng,
+    toLat:   state.toLat,   toLng:   state.toLng,
+    date:    document.getElementById('date').value,   // YYYY-MM-DD
+    time:    document.getElementById('time').value,   // HH:MM
+    persons: state.persons,
+    luggage: state.luggage,
+    childSeatCount: state.seats,
+    vehicleType: state.veh,            // 'taxi' | 'van'
+    name:    document.getElementById('name').value.trim(),
+    phone:   rawPhone ? (state.dialCode + ' ' + rawPhone) : '',  // π.χ. "+30 6912345678"
+    email:   document.getElementById('email').value.trim(),
+    flight:  document.getElementById('flight').value.trim(),
+    note:    document.getElementById('note').value.trim(),
+    lang:    document.documentElement.lang || 'el',
+    payFull: !!state.payFull,
+    tenantId: EFORM_ID,
+  };
+}
+
+function setBtn(state_, html){
+  btn.className = 'submit' + (state_?(' '+state_):'');
+  btn.innerHTML = html;
+}
+
+function isValidEmail(e){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}
+
+btn.addEventListener('click', async ()=>{
+  if (lastEstimate.blocked){ return; }  // ασφάλεια — το UI ήδη δείχνει WhatsApp σε αυτή την περίπτωση
+  const data = gather();
+
+  // Επικύρωση
+  if (!data.from || !data.to){ flash('err','<i class="fas fa-exclamation-circle"></i> Συμπληρώστε Από και Προς'); return; }
+  if (!data.name){ flash('err','<i class="fas fa-exclamation-circle"></i> Συμπληρώστε το ονοματεπώνυμο'); return; }
+  if (!document.getElementById('phone').value.trim()){ flash('err','<i class="fas fa-exclamation-circle"></i> Συμπληρώστε τηλέφωνο'); return; }
+  if (!data.date || !data.time){ flash('err','<i class="fas fa-exclamation-circle"></i> Επιλέξτε ημερομηνία και ώρα'); return; }
+  if (!isValidEmail(data.email)){ flash('err','<i class="fas fa-exclamation-circle"></i> Συμπληρώστε έγκυρο email'); return; }
+  if (!data.flight){ flash('err','<i class="fas fa-exclamation-circle"></i> Συμπληρώστε πτήση/πλοίο (ή 0)'); return; }
+
+  btn.disabled = true;
+  setBtn('', '<i class="fas fa-spinner fa-spin"></i> Δημιουργία πληρωμής…');
+
+  try{
+    // ΔΕΝ καλούμε πια το submitPublicBooking απευθείας. Πρώτα δημιουργούμε
+    // Viva payment order για το 10% προκαταβολή· η δουλειά αποθηκεύεται στο
+    // saved_jobs ΜΟΝΟ μετά από επιτυχή πληρωμή (webhook vivaWebhook στο index.js).
+    const res = await fetch(VIVA_ORDER_ENDPOINT, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify(data)
+    });
+    const j = await res.json().catch(()=>({}));
+    if (!res.ok || !j.ok || !j.checkoutUrl) throw new Error(j.error || ('HTTP '+res.status));
+
+    // Κρατάμε ΟΛΟΚΛΗΡΗ τη φόρμα τοπικά (sessionStorage) ώστε, αν η πληρωμή
+    // αποτύχει και ο πελάτης επιστρέψει, να ΞΑΝΑΓΕΜΙΣΕΙ η φόρμα αυτόματα και
+    // να μη χρειαστεί να τα ξαναγράψει όλα από την αρχή.
+    try{
+      sessionStorage.setItem('athenstaxi_pending_booking', JSON.stringify({
+        depositAmount: j.depositAmount || 0,
+        rawPhone: document.getElementById('phone').value.trim(),
+        fields: {
+          from: data.from, to: data.to, date: data.date, time: data.time,
+          name: data.name, email: data.email, flight: data.flight, note: data.note,
+        },
+        state: {
+          persons: state.persons, luggage: state.luggage, seats: state.seats,
+          veh: state.veh, autoVan: state.autoVan,
+          fromLat: state.fromLat, fromLng: state.fromLng,
+          toLat: state.toLat, toLng: state.toLng,
+          dialCode: state.dialCode, country: state.country,
+          payFull: state.payFull,
+        },
+      }));
+    }catch(e){}
+
+    setBtn('ok', '<i class="fas fa-check"></i> Μεταφορά στη σελίδα πληρωμής…');
+    window.location.href = j.checkoutUrl;
+  }catch(e){
+    console.error(e);
+    btn.disabled = false;
+    if (String(e && e.message) === 'outside_booking_window'){
+      flash('err','<i class="fas fa-exclamation-circle"></i> Η κράτηση χρειάζεται προσωπική επιβεβαίωση — δείτε την επιλογή WhatsApp');
+    } else {
+      flash('err','<i class="fas fa-exclamation-circle"></i> Σφάλμα σύνδεσης με την πληρωμή — δοκιμάστε ξανά');
+    }
+  }
+});
+
+function flash(kind, html){
+  setBtn(kind, html);
+  setTimeout(()=>{ if(!btn.disabled||kind==='err'){ btn.disabled=false; setBtn('', '<i class="fas fa-credit-card"></i> Πληρωμή προκαταβολής &amp; αποστολή'); } }, 2400);
+}
+
+/* ---- Pop-up modal (επιτυχία/αποτυχία πληρωμής) ---- */
+function showVivaModal(success, html){
+  const overlay = document.createElement('div');
+  overlay.className = 'viva-modal-overlay';
+  overlay.innerHTML =
+    '<div class="viva-modal-box ' + (success?'ok':'fail') + '">' +
+      '<div class="viva-modal-icon"><i class="fas ' + (success?'fa-check-circle':'fa-times-circle') + '"></i></div>' +
+      html +
+      '<button type="button" class="viva-modal-btn">' + (success?'Τέλεια!':'Το κατάλαβα') + '</button>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  const close = ()=>{ overlay.remove(); };
+  overlay.querySelector('.viva-modal-btn').addEventListener('click', close);
+  overlay.addEventListener('click', (e)=>{ if (e.target === overlay) close(); });
+}
+
+/* ---- Αποτέλεσμα επιστροφής από τη Viva (Success/Failure URL) ----
+   Ρύθμισε αυτή τη σελίδα ως Success URL ΚΑΙ ως Failure URL στο Source του
+   Viva dashboard. Η Viva προσθέτει query params όταν επιστρέφει:
+     επιτυχία: ?t=<transactionId>          (η πληρωμή έγινε)
+     αποτυχία: ?eventId=<id>  (χωρίς t)    (η πληρωμή ΔΕΝ έγινε) */
+(function handleVivaReturn(){
+  const params = new URLSearchParams(window.location.search);
+  const t = params.get('t');
+  const eventId = params.get('eventId');
+  if (!t && !eventId) return; // δεν ήρθαμε από Viva redirect — κανονική φόρτωση φόρμας
+
+  let info = null;
+  try{ info = JSON.parse(sessionStorage.getItem('athenstaxi_pending_booking') || 'null'); }catch(e){}
+  const f = (info && info.fields) || {};
+  const from = f.from || '-';
+  const to   = f.to   || '-';
+  const when = f.date ? (f.date + (f.time ? ' ' + f.time : '')) : '-';
+  const amt  = info && info.depositAmount ? fmtEUR(info.depositAmount) : '-';
+
+  const box = document.createElement('div');
+  box.className = 'viva-result-banner ' + (t ? 'ok' : 'fail');
+
+  if (t){
+    // ── ΕΠΙΤΥΧΙΑ ─────────────────────────────────────────────────────────
+    box.innerHTML =
+      '<div class="vrb-title"><i class="fas fa-check-circle"></i> Η ΚΡΑΤΗΣΗ ΕΓΙΝΕ — η προκαταβολή πληρώθηκε</div>' +
+      '<div class="vrb-row"><span class="k">Διαδρομή:</span><span>' + from + ' → ' + to + '</span></div>' +
+      '<div class="vrb-row"><span class="k">Ημερομηνία/ώρα:</span><span>' + when + '</span></div>' +
+      '<div class="vrb-row"><span class="k">Πληρώθηκε:</span><span>' + amt + '</span></div>' +
+      '<div class="vrb-row" style="margin-top:8px;">Θα επικοινωνήσουμε μαζί σας σύντομα για επιβεβαίωση.</div>';
+    document.getElementById('actionArea').style.display = 'none';
+    document.getElementById('depositBanner').style.display = 'none';
+
+    showVivaModal(true,
+      '<div class="viva-modal-title">Η πληρωμή ολοκληρώθηκε!</div>' +
+      '<div class="viva-modal-text">Η κράτησή σας <b>' + from + ' → ' + to + '</b> επιβεβαιώθηκε.<br>' +
+      'Πληρώσατε <b>' + amt + '</b> προκαταβολή. Θα επικοινωνήσουμε μαζί σας σύντομα.</div>');
+
+    try{ sessionStorage.removeItem('athenstaxi_pending_booking'); }catch(e){}
+
+  } else {
+    // ── ΑΠΟΤΥΧΙΑ — η φόρμα ΞΑΝΑΓΕΜΙΖΕΙ αυτόματα για νέα προσπάθεια ────────
+    box.innerHTML =
+      '<div class="vrb-title"><i class="fas fa-times-circle"></i> Η ΚΡΑΤΗΣΗ ΔΕΝ ΕΓΙΝΕ — η πληρωμή δεν ολοκληρώθηκε</div>' +
+      '<div class="vrb-row"><span class="k">Διαδρομή:</span><span>' + from + ' → ' + to + '</span></div>' +
+      '<div class="vrb-row"><span class="k">Ημερομηνία/ώρα:</span><span>' + when + '</span></div>' +
+      '<div class="vrb-row" style="margin-top:8px;">Η φόρμα παρακάτω ξαναγέμισε αυτόματα — πατήστε ξανά το κουμπί πληρωμής για νέα προσπάθεια.</div>';
+
+    showVivaModal(false,
+      '<div class="viva-modal-title">Η πληρωμή απέτυχε</div>' +
+      '<div class="viva-modal-text">Η προκαταβολή για <b>' + from + ' → ' + to + '</b> δεν ολοκληρώθηκε.<br>' +
+      'Η φόρμα παρέμεινε συμπληρωμένη — δοκιμάστε ξανά με άλλη κάρτα.</div>');
+
+    // ── Ξαναγέμισμα όλων των πεδίων της φόρμας από το snapshot ──
+    if (info){
+      Object.keys(f).forEach(id=>{
+        const el = document.getElementById(id);
+        if (el) el.value = f[id] || '';
+      });
+      if (info.rawPhone){
+        const ph = document.getElementById('phone');
+        if (ph) ph.value = info.rawPhone;
+      }
+      if (info.state){
+        Object.assign(state, info.state);
+        document.getElementById('ccFlag').src = flagUrl(state.country || 'GR');
+        document.getElementById('ccFlag').alt = state.country || 'GR';
+        document.getElementById('ccCode').textContent = state.dialCode || '+30';
+        document.getElementById('payModeDeposit').classList.toggle('sel', !state.payFull);
+        document.getElementById('payModeFull').classList.toggle('sel', !!state.payFull);
+        render();
+      }
+    }
+    // Κρατάμε το snapshot (όχι διαγραφή) — αν αποτύχει ξανά, να μπορεί να
+    // ξαναγεμίσει σωστά τη φόρμα. Διαγράφεται μόνο σε επιτυχία (πάνω) ή
+    // όταν ο πελάτης πατήσει ξανά «Πληρωμή» (αντικαθίσταται με νέο snapshot).
+  }
+
+  const cardEl = document.querySelector('.card');
+  if (cardEl) cardEl.parentNode.insertBefore(box, cardEl.nextSibling);
+})();
+function resetForm(){
+  ['from','to','date','time','name','phone','email','flight','note'].forEach(id=>document.getElementById(id).value='');
+  const _ts = document.getElementById('timeScroll');
+  if (_ts) _ts.querySelectorAll('.time-opt.sel').forEach(o=>o.classList.remove('sel'));
+  state.persons=2; state.luggage=2; state.seats=0; state.veh='taxi'; state.autoVan=false;
+  state.fromLat=state.fromLng=state.toLat=state.toLng=null;
+  state.payFull=false;
+  document.getElementById('payModeDeposit').classList.add('sel');
+  document.getElementById('payModeFull').classList.remove('sel');
+  lastEstimate = { price:0, nightApplies:false, blocked:false, reasons:[],
+    displayOriginal:0, discountPercent:8, minChargeApplied:false,
+    distanceKm:0, durationMin:0, routePolyline:null };
+  btn.disabled=false; setBtn('', '<i class="fas fa-credit-card"></i> Πληρωμή προκαταβολής &amp; αποστολή');
+  render();
+}
+
+/* ============ ΕΝΑΛΛΑΓΗ Από ↔ Προς ============ */
+document.getElementById('swapBtn').addEventListener('click', ()=>{
+  const sb = document.getElementById('swapBtn');
+  sb.classList.toggle('spin');
+  const fi = document.getElementById('from'), ti = document.getElementById('to');
+  [fi.value, ti.value] = [ti.value, fi.value];
+  [state.fromLat, state.toLat] = [state.toLat, state.fromLat];
+  [state.fromLng, state.toLng] = [state.toLng, state.fromLng];
+  scheduleEstimate();
+});
+
+/* ============ GOOGLE MAPS: autocomplete (Places New) + χάρτης ============ */
+// Όρια Ελλάδας (bias προτάσεων)
+const GREECE_BOUNDS = { south:34.7, west:19.3, north:41.8, east:29.7 };
+let geocoder=null, mapObj=null, mapTargetId=null, mapPickedAddr='', mapDebounce=null;
+
+// Κωδικός τοποθεσίας Google Maps (Plus Code / Open Location Code), π.χ.
+// "M3W4+9W Λαύριο" ή global "8FVC9G8F+6X". Το Places Autocomplete δεν τους
+// καταλαβαίνει καλά σαν ελεύθερο κείμενο — λύνονται ξεχωριστά με τον
+// Geocoder (που ήδη φορτώνεται παρακάτω, βιβλιοθήκη 'geocoding').
+const PLUS_CODE_RE = /\b[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3}\b/i;
+
+// Places New API references (φορτώνονται στο initBooking)
+let AutocompleteSuggestion=null, AutocompleteSessionToken=null, PlaceClass=null, LatLngBoundsClass=null;
+let acSessionToken=null;
+const acState = {
+  from: { timer:null, items:[], active:-1 },
+  to:   { timer:null, items:[], active:-1 },
+};
+
+// Callback από το Maps JS
+async function initBooking(){
+  // Φόρτωσε τις νέες βιβλιοθήκες
+  const placesLib = await google.maps.importLibrary('places');
+  const coreLib   = await google.maps.importLibrary('core');
+  await google.maps.importLibrary('geocoding');
+  AutocompleteSuggestion    = placesLib.AutocompleteSuggestion;
+  AutocompleteSessionToken  = placesLib.AutocompleteSessionToken;
+  PlaceClass                = placesLib.Place;
+  LatLngBoundsClass         = coreLib.LatLngBounds;
+  geocoder = new google.maps.Geocoder();
+  newSession();
+
+  ['from','to'].forEach(id=>{
+    const inp = document.getElementById(id);
+    inp.addEventListener('input', ()=>onAcInput(id));
+    inp.addEventListener('keydown', (e)=>onAcKey(id, e));
+    inp.addEventListener('blur', ()=>setTimeout(()=>closeAc(id), 180));
+    inp.addEventListener('focus', ()=>{ if (!inp.value.trim()) renderSuggestions(id, []); });
+  });
+}
+
+function newSession(){
+  if (AutocompleteSessionToken) acSessionToken = new AutocompleteSessionToken();
+}
+
+// Πληκτρολόγηση → φέρε προτάσεις (debounced)
+function onAcInput(id){
+  // ο χρήστης γράφει με το χέρι → καθάρισε τις παλιές συντεταγμένες
+  if (id==='from'){ state.fromLat=null; state.fromLng=null; }
+  else { state.toLat=null; state.toLng=null; }
+
+  const inp = document.getElementById(id);
+  const q = inp.value.trim();
+  const st = acState[id];
+  if (st.timer) clearTimeout(st.timer);
+
+  // Οι πελάτες εμφανίζονται ΑΜΕΣΩΣ (χωρίς αναμονή), ίδιο με το Android app —
+  // τα κανονικά αποτελέσματα Google Places προστίθενται μετά, με debounce.
+  renderSuggestions(id, []);
+
+  if (q.length < 3){ return; }   // Places autocomplete ξεκινά από 3 χαρακτήρες
+  if (PLUS_CODE_RE.test(q)){ st.timer = setTimeout(()=>fetchPlusCode(id, q), 280); return; }
+  st.timer = setTimeout(()=>fetchSuggestions(id, q), 280);
+}
+
+// Κωδικός τοποθεσίας (Plus Code) → Geocoder απευθείας (δέχεται και τη
+// σύντομη μορφή με τοπωνύμιο μετά, π.χ. "M3W4+9W Λαύριο").
+//
+// ΣΗΜΑΝΤΙΚΟ: όταν κάποιος κάνει copy-paste μια τοποθεσία απευθείας από το
+// Google Maps, συχνά έρχεται σαν "M3W4+9W, Λαύριο 195 00" — δηλαδή με ΚΟΜΜΑ
+// και ΤΑΧΥΔΡΟΜΙΚΟ ΚΩΔΙΚΑ στο τέλος. Το Geocoding API περιμένει τη μορφή
+// "ΚΩΔΙΚΟΣ ΤΟΠΩΝΥΜΙΟ" (χωρίς κόμμα, χωρίς Τ.Κ.) και με τον Τ.Κ. στο τέλος
+// συχνά επιστρέφει ZERO_RESULTS — οπότε δεν εμφανιζόταν ΚΑΝΕΝΑ αποτέλεσμα.
+// Καθαρίζουμε το κείμενο πριν το στείλουμε, και αν παρόλα αυτά αποτύχει,
+// ξαναδοκιμάζουμε μόνο με τον γυμνό κωδικό (δουλεύει για global κωδικούς).
+function cleanPlusCodeQuery(q){
+  const m = PLUS_CODE_RE.exec(q);
+  if (!m) return { code: null, compound: q };
+  const code = m[0];
+  let rest = q.slice(m.index + code.length);
+  rest = rest.replace(/^[\s,]+/, '');          // κόμμα/κενά αμέσως μετά τον κωδικό
+  rest = rest.replace(/[\d\s]{3,}$/, '');       // Τ.Κ. στο τέλος ("195 00", "19500")
+  rest = rest.replace(/[,.\s]+$/, '').trim();   // υπολειπόμενα σημεία στίξης
+  return { code, compound: rest ? (code + ' ' + rest) : code };
+}
+
+function fetchPlusCode(id, q){
+  if (!geocoder) return;
+  const { code, compound } = cleanPlusCodeQuery(q);
+  geocoder.geocode({ address:compound, region:'gr' }, (results, status)=>{
+    if (status==='OK' && results && results.length){
+      const r = results[0];
+      renderPlusCodeResult(id, {
+        text: r.formatted_address || compound,
+        lat:  r.geometry.location.lat(),
+        lng:  r.geometry.location.lng(),
+      });
+      return;
+    }
+    // Fallback: μόνο ο γυμνός κωδικός (χωρίς τοπωνύμιο) — καλύπτει τους
+    // global κωδικούς (π.χ. "8FVC9G8F+6X") και περιπτώσεις που το τοπωνύμιο
+    // μπέρδεψε τον Geocoder.
+    if (code && compound !== code){
+      geocoder.geocode({ address:code, region:'gr' }, (results2, status2)=>{
+        if (status2==='OK' && results2 && results2.length){
+          const r2 = results2[0];
+          renderPlusCodeResult(id, {
+            text: r2.formatted_address || code,
+            lat:  r2.geometry.location.lat(),
+            lng:  r2.geometry.location.lng(),
+          });
+        } else {
+          renderPlusCodeResult(id, null);
+        }
+      });
+    } else {
+      renderPlusCodeResult(id, null);
+    }
+  });
+}
+
+function renderPlusCodeResult(id, resolved){
+  const list = document.getElementById('ac-'+id);
+  const st = acState[id];
+  st.items = resolved ? [{ plusCode: resolved }] : [];
+  st.active = -1;
+  if (!resolved){
+    list.innerHTML = '<div class="ac-item" style="opacity:.7;cursor:default">'+
+      '<i class="fas fa-triangle-exclamation"></i><div><div class="ac-main">'+
+      'Δεν βρέθηκε ο κωδικός τοποθεσίας</div></div></div>';
+    list.classList.add('open');
+    return;
+  }
+  list.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'ac-item';
+  row.innerHTML =
+    '<i class="fas fa-location-crosshairs"></i><div>' +
+    '<div class="ac-main">'+escapeHtml(resolved.text)+'</div>' +
+    '<div class="ac-sub">Κωδικός τοποθεσίας (Plus Code)</div>' +
+    '</div>';
+  row.addEventListener('mousedown', (e)=>{ e.preventDefault(); pickSuggestion(id, 0); });
+  list.appendChild(row);
+  list.classList.add('open');
+}
+
+async function fetchSuggestions(id, q){
+  if (!AutocompleteSuggestion) return;
+  try{
+    const bounds = new LatLngBoundsClass(
+      { lat:GREECE_BOUNDS.south, lng:GREECE_BOUNDS.west },
+      { lat:GREECE_BOUNDS.north, lng:GREECE_BOUNDS.east }
+    );
+    const req = {
+      input: q,
+      sessionToken: acSessionToken,
+      includedRegionCodes: ['gr'],      // ΜΟΝΟ Ελλάδα
+      locationBias: bounds,
+      language: 'el',
+    };
+    const { suggestions } =
+      await AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
+    renderSuggestions(id, suggestions || []);
+  }catch(e){
+    console.warn('autocomplete error:', e);
+    closeAc(id);
+  }
+}
+
+function renderSuggestions(id, suggestions){
+  const list = document.getElementById('ac-'+id);
+  const st = acState[id];
+  const q = document.getElementById(id).value.trim();
+  const clientItems = matchingClients(q).map(c => ({ client:c }));
+  const placeItems  = (suggestions || []).filter(s=>s.placePrediction);
+  st.items = [...clientItems, ...placeItems];
+  st.active = -1;
+  if (!st.items.length){ closeAc(id); return; }
+
+  list.innerHTML = '';
+  if (clientItems.length){
+    const header = document.createElement('div');
+    header.className = 'ac-section-label';
+    header.style.cssText = 'padding:6px 14px;font-size:.72rem;font-weight:700;color:var(--primary-color);text-transform:uppercase;letter-spacing:.4px;';
+    header.innerHTML = '<i class="fas fa-star"></i> Πελάτες';
+    list.appendChild(header);
+  }
+  st.items.forEach((s, idx)=>{
+    const row = document.createElement('div');
+    row.className = 'ac-item';
+    if (s.client){
+      const c = s.client;
+      const routeBadge = (c.routes && c.routes.length)
+        ? '<span style="margin-left:auto;flex-shrink:0;font-size:.68rem;color:var(--primary-color);background:rgba(212,175,55,.12);padding:2px 8px;border-radius:10px;">'+c.routes.length+' διαδρομές</span>'
+        : '';
+      row.innerHTML =
+        '<i class="fas fa-star" style="color:var(--primary-color);"></i>' +
+        '<div style="display:flex;align-items:center;flex:1;gap:8px;">' +
+        '<div><div class="ac-main">'+escapeHtml(c.name)+'</div>' +
+        (c.fromName ? '<div class="ac-sub">'+escapeHtml(c.fromName)+'</div>' : '') +
+        '</div>' + routeBadge + '</div>';
+    } else {
+      const pp = s.placePrediction;
+      const main = pp.mainText ? pp.mainText.text : pp.text.text;
+      const sub  = pp.secondaryText ? pp.secondaryText.text : '';
+      row.innerHTML =
+        '<i class="fas fa-location-dot"></i><div>' +
+        '<div class="ac-main">'+escapeHtml(main)+'</div>' +
+        (sub ? '<div class="ac-sub">'+escapeHtml(sub)+'</div>' : '') +
+        '</div>';
+    }
+    row.addEventListener('mousedown', (e)=>{ e.preventDefault(); pickSuggestion(id, idx); });
+    list.appendChild(row);
+  });
+  list.classList.add('open');
+}
+
+async function pickSuggestion(id, idx){
+  const st = acState[id];
+  const s = st.items[idx];
+  if (!s) return;
+
+  // Επιλογή γνωστού πελάτη — γέμισε απευθείας με τη διεύθυνση/συντεταγμένες
+  // βάσης του, χωρίς κλήση Places.
+  if (s.client){
+    const c = s.client;
+    document.getElementById(id).value = c.fromName || c.name;
+    if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; }
+    else { state.toLat=c.fromLat; state.toLng=c.fromLng; }
+    scheduleEstimate();
+    closeAc(id);
+    return;
+  }
+
+  // Κωδικός τοποθεσίας (Plus Code) — ήδη λυμένος από τον Geocoder, γέμισε
+  // απευθείας χωρίς fetchFields (δεν υπάρχει place/placePrediction εδώ).
+  if (s.plusCode){
+    document.getElementById(id).value = s.plusCode.text;
+    if (id==='from'){ state.fromLat=s.plusCode.lat; state.fromLng=s.plusCode.lng; }
+    else { state.toLat=s.plusCode.lat; state.toLng=s.plusCode.lng; }
+    scheduleEstimate();
+    closeAc(id);
+    return;
+  }
+
+  if (!s.placePrediction) return;
+  try{
+    const place = s.placePrediction.toPlace();
+    await place.fetchFields({ fields:['formattedAddress','location','displayName'] });
+    const text = place.formattedAddress || (place.displayName || '');
+    const lat = place.location ? place.location.lat() : null;
+    const lng = place.location ? place.location.lng() : null;
+    document.getElementById(id).value = text;
+    if (id==='from'){ state.fromLat=lat; state.fromLng=lng; }
+    else { state.toLat=lat; state.toLng=lng; }
+    scheduleEstimate();
+  }catch(e){ console.warn('place details error:', e); }
+  closeAc(id);
+  newSession();   // νέο session μετά από επιλογή (χρέωση ανά session)
+}
+
+function onAcKey(id, e){
+  const list = document.getElementById('ac-'+id);
+  if (!list.classList.contains('open')) return;
+  const st = acState[id];
+  const rows = list.querySelectorAll('.ac-item');
+  if (e.key==='ArrowDown'){ e.preventDefault(); st.active=Math.min(st.active+1, rows.length-1); markActive(rows, st.active); }
+  else if (e.key==='ArrowUp'){ e.preventDefault(); st.active=Math.max(st.active-1, 0); markActive(rows, st.active); }
+  else if (e.key==='Enter'){ if (st.active>=0){ e.preventDefault(); pickSuggestion(id, st.active); } }
+  else if (e.key==='Escape'){ closeAc(id); }
+}
+function markActive(rows, i){ rows.forEach((r,idx)=>r.classList.toggle('active', idx===i)); }
+function closeAc(id){ document.getElementById('ac-'+id).classList.remove('open'); }
+function escapeHtml(t){ const d=document.createElement('div'); d.textContent=t||''; return d.innerHTML; }
+
+// ── Map modal ──────────────────────────────────────────────
+let MapClass=null;
+async function openMap(targetId){
+  mapTargetId = targetId;
+  document.getElementById('mapTitle').textContent =
+    targetId==='from' ? 'Επιλογή σημείου αφετηρίας' : 'Επιλογή προορισμού';
+  document.getElementById('mapModal').classList.add('open');
+  mapPickedAddr=''; setMapAddr('Μετακινήστε τον χάρτη…'); 
+  document.getElementById('mapConfirm').disabled=true;
+
+  // Κέντρο: ό,τι υπάρχει ήδη, αλλιώς Αθήνα
+  const haveLat = targetId==='from' ? state.fromLat : state.toLat;
+  const haveLng = targetId==='from' ? state.fromLng : state.toLng;
+  const center = (haveLat && haveLng) ? {lat:haveLat,lng:haveLng} : {lat:37.9838,lng:23.7275};
+
+  if (!MapClass){
+    const mapsLib = await google.maps.importLibrary('maps');
+    MapClass = mapsLib.Map;
+  }
+  if (!mapObj){
+    mapObj = new MapClass(document.getElementById('mapCanvas'), {
+      center, zoom:14, disableDefaultUI:true, zoomControl:true,
+      gestureHandling:'greedy', clickableIcons:false,
+    });
+    mapObj.addListener('idle', onMapIdle);
+  } else {
+    mapObj.setCenter(center); mapObj.setZoom(14);
+    google.maps.event.trigger(mapObj,'idle');
+  }
+}
+function closeMap(){ document.getElementById('mapModal').classList.remove('open'); }
+
+function onMapIdle(){
+  // Η πινέζα είναι σταθερή στο κέντρο· διαβάζουμε το κέντρο του χάρτη.
+  const c = mapObj.getCenter();
+  if (mapDebounce) clearTimeout(mapDebounce);
+  setMapAddr('Αναζήτηση διεύθυνσης…');
+  document.getElementById('mapConfirm').disabled=true;
+  mapDebounce = setTimeout(()=>{
+    geocoder.geocode({ location:{lat:c.lat(),lng:c.lng()} }, (res,status)=>{
+      if (status==='OK' && res[0]){
+        mapPickedAddr = res[0].formatted_address;
+        setMapAddr(mapPickedAddr);
+        document.getElementById('mapConfirm').disabled=false;
+      } else {
+        setMapAddr('Δεν βρέθηκε διεύθυνση εδώ');
+      }
+    });
+  }, 350);
+}
+function setMapAddr(t){
+  document.querySelector('#mapAddr span').textContent = t;
+}
+function confirmMap(){
+  if (!mapPickedAddr) return;
+  const c = mapObj.getCenter();
+  const lat=c.lat(), lng=c.lng();
+  document.getElementById(mapTargetId).value = mapPickedAddr;
+  if (mapTargetId==='from'){ state.fromLat=lat; state.fromLng=lng; }
+  else { state.toLat=lat; state.toLng=lng; }
+  scheduleEstimate();
+  closeMap();
+}
+
+document.querySelectorAll('.map-btn').forEach(b=>{
+  b.addEventListener('click', ()=>openMap(b.dataset.target));
+});
+document.getElementById('mapClose').addEventListener('click', closeMap);
+document.getElementById('mapConfirm').addEventListener('click', confirmMap);
+
+// ΣΗΜΑΝΤΙΚΟ: κλείνουμε το modal ΜΟΝΟ αν το «πάτημα» ξεκίνησε ΚΑΙ τελείωσε
+// πάνω στο ίδιο το backdrop (γκρι φόντο) — όχι αν ξεκίνησε μέσα στον χάρτη
+// και απλώς το mouseup/touchend «προσγειώθηκε» εκεί λόγω μετακίνησης
+// (σύρσιμο χάρτη). Αλλιώς το drag του χάρτη έκλεινε κατά λάθος το modal,
+// τόσο με ποντίκι όσο και με δάχτυλο.
+let _mapModalPressStartedOnBackdrop = false;
+const _mapModalEl = document.getElementById('mapModal');
+['mousedown','touchstart'].forEach(evt=>{
+  _mapModalEl.addEventListener(evt, (e)=>{
+    _mapModalPressStartedOnBackdrop = (e.target.id === 'mapModal');
+  }, { passive: true });
+});
+_mapModalEl.addEventListener('click', (e)=>{
+  if (e.target.id==='mapModal' && _mapModalPressStartedOnBackdrop) closeMap();
+  _mapModalPressStartedOnBackdrop = false;
+});
+
+/* ============ GPS: «η τοποθεσία μου» (μόνο κινητό) ============ */
+function getGps(onOk, onErr){
+  if (!navigator.geolocation){ onErr && onErr('no-geo'); return; }
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>onOk(pos.coords.latitude, pos.coords.longitude),
+    (err)=>onErr && onErr(err.code),
+    { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+  );
+}
+
+// Κουμπιά GPS δίπλα στα πεδία (Από + Προς)
+document.querySelectorAll('.gps-btn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const id = b.dataset.target;
+    b.classList.add('busy');
+    getGps(
+      async (lat,lng)=>{
+        // reverse geocode για να γεμίσουμε το πεδίο με διεύθυνση
+        if (!geocoder){ b.classList.remove('busy'); return; }
+        geocoder.geocode({ location:{lat,lng} }, (res,status)=>{
+          b.classList.remove('busy');
+          const text = (status==='OK' && res[0]) ? res[0].formatted_address
+                                                  : (lat.toFixed(5)+', '+lng.toFixed(5));
+          document.getElementById(id).value = text;
+          if (id==='from'){ state.fromLat=lat; state.fromLng=lng; }
+          else { state.toLat=lat; state.toLng=lng; }
+          scheduleEstimate();
+        });
+      },
+      (code)=>{ b.classList.remove('busy'); gpsError(code); }
+    );
+  });
+});
+
+// Κουμπί GPS μέσα στον χάρτη — κεντράρει τον χάρτη στη θέση μου
+const mapGpsBtn = document.getElementById('mapGps');
+if (mapGpsBtn){
+  mapGpsBtn.addEventListener('click', ()=>{
+    mapGpsBtn.classList.add('busy');
+    getGps(
+      (lat,lng)=>{
+        mapGpsBtn.classList.remove('busy');
+        if (mapObj){ mapObj.setCenter({lat,lng}); mapObj.setZoom(16); }
+      },
+      (code)=>{ mapGpsBtn.classList.remove('busy'); gpsError(code); }
+    );
+  });
+}
+
+function gpsError(code){
+  // 1 = άρνηση άδειας, 2 = μη διαθέσιμο, 3 = timeout
+  let msg = 'Δεν ήταν δυνατός ο εντοπισμός τοποθεσίας.';
+  if (code===1) msg = 'Δώστε άδεια τοποθεσίας στον browser για να λειτουργήσει.';
+  alert(msg);
+}
+
+/* ============ COUNTRY CODE PICKER ============ */
+// Δημοφιλείς χώρες (Ελλάδα πρώτη). Η σημαία βγαίνει από τον κωδικό 'c' (flagcdn).
+const COUNTRIES = [
+  {c:'GR',n:'Ελλάδα',d:'+30'},
+  {c:'CY',n:'Κύπρος',d:'+357'},
+  {c:'AS',n:'American Samoa',d:'+1'},
+  {c:'AI',n:'Anguilla',d:'+1'},
+  {c:'AW',n:'Aruba',d:'+297'},
+  {c:'BM',n:'Bermuda',d:'+1'},
+  {c:'BQ',n:'Bonaire, Sint Eustatius and Saba',d:'+599'},
+  {c:'IO',n:'British Indian Ocean Territory',d:'+246'},
+  {c:'KY',n:'Cayman Islands',d:'+1'},
+  {c:'CX',n:'Christmas Island',d:'+61'},
+  {c:'CC',n:'Cocos (Keeling) Islands',d:'+61'},
+  {c:'CK',n:'Cook Islands',d:'+682'},
+  {c:'CW',n:'Curaçao',d:'+599'},
+  {c:'SZ',n:'Eswatini',d:'+268'},
+  {c:'FK',n:'Falkland Islands (Malvinas)',d:'+500'},
+  {c:'FO',n:'Faroe Islands',d:'+298'},
+  {c:'GF',n:'French Guiana',d:'+594'},
+  {c:'PF',n:'French Polynesia',d:'+689'},
+  {c:'GI',n:'Gibraltar',d:'+350'},
+  {c:'GL',n:'Greenland',d:'+299'},
+  {c:'GP',n:'Guadeloupe',d:'+590'},
+  {c:'GU',n:'Guam',d:'+1'},
+  {c:'GG',n:'Guernsey',d:'+44'},
+  {c:'IM',n:'Isle of Man',d:'+44'},
+  {c:'JE',n:'Jersey',d:'+44'},
+  {c:'MQ',n:'Martinique',d:'+596'},
+  {c:'YT',n:'Mayotte',d:'+262'},
+  {c:'MS',n:'Montserrat',d:'+1'},
+  {c:'NC',n:'New Caledonia',d:'+687'},
+  {c:'NU',n:'Niue',d:'+683'},
+  {c:'NF',n:'Norfolk Island',d:'+672'},
+  {c:'MP',n:'Northern Mariana Islands',d:'+1'},
+  {c:'PS',n:'Palestine, State of',d:'+970'},
+  {c:'PR',n:'Puerto Rico',d:'+1'},
+  {c:'RE',n:'Réunion',d:'+262'},
+  {c:'BL',n:'Saint Barthélemy',d:'+590'},
+  {c:'SH',n:'Saint Helena, Ascension and Tristan da Cunha',d:'+290'},
+  {c:'MF',n:'Saint Martin (French part)',d:'+590'},
+  {c:'PM',n:'Saint Pierre and Miquelon',d:'+508'},
+  {c:'SX',n:'Sint Maarten (Dutch part)',d:'+1'},
+  {c:'SJ',n:'Svalbard and Jan Mayen',d:'+47'},
+  {c:'TK',n:'Tokelau',d:'+690'},
+  {c:'TC',n:'Turks and Caicos Islands',d:'+1'},
+  {c:'VG',n:'Virgin Islands, British',d:'+1'},
+  {c:'VI',n:'Virgin Islands, U.S.',d:'+1'},
+  {c:'WF',n:'Wallis and Futuna',d:'+681'},
+  {c:'EH',n:'Western Sahara',d:'+212'},
+  {c:'AX',n:'Åland Islands',d:'+358'},
+  {c:'VC',n:'Άγιος Βικέντιος',d:'+1'},
+  {c:'SM',n:'Άγιος Μαρίνος',d:'+378'},
+  {c:'KN',n:'Άγιος Χριστόφορος',d:'+1'},
+  {c:'EG',n:'Αίγυπτος',d:'+20'},
+  {c:'LC',n:'Αγία Λουκία',d:'+1'},
+  {c:'AO',n:'Αγκόλα',d:'+244'},
+  {c:'AZ',n:'Αζερμπαϊτζάν',d:'+994'},
+  {c:'ET',n:'Αιθιοπία',d:'+251'},
+  {c:'CI',n:'Ακτή Ελεφαντοστού',d:'+225'},
+  {c:'AL',n:'Αλβανία',d:'+355'},
+  {c:'DZ',n:'Αλγερία',d:'+213'},
+  {c:'TL',n:'Ανατ. Τιμόρ',d:'+670'},
+  {c:'AD',n:'Ανδόρα',d:'+376'},
+  {c:'AG',n:'Αντίγκουα και Μπαρμπούντα',d:'+1'},
+  {c:'AR',n:'Αργεντινή',d:'+54'},
+  {c:'AM',n:'Αρμενία',d:'+374'},
+  {c:'AT',n:'Αυστρία',d:'+43'},
+  {c:'AU',n:'Αυστραλία',d:'+61'},
+  {c:'AF',n:'Αφγανιστάν',d:'+93'},
+  {c:'HT',n:'Αϊτή',d:'+509'},
+  {c:'BE',n:'Βέλγιο',d:'+32'},
+  {c:'VU',n:'Βανουάτου',d:'+678'},
+  {c:'VA',n:'Βατικανό',d:'+39'},
+  {c:'VE',n:'Βενεζουέλα',d:'+58'},
+  {c:'VN',n:'Βιετνάμ',d:'+84'},
+  {c:'BO',n:'Βολιβία',d:'+591'},
+  {c:'BA',n:'Βοσνία-Ερζεγοβίνη',d:'+387'},
+  {c:'BG',n:'Βουλγαρία',d:'+359'},
+  {c:'BR',n:'Βραζιλία',d:'+55'},
+  {c:'KP',n:'Βόρεια Κορέα',d:'+850'},
+  {c:'MK',n:'Βόρεια Μακεδονία',d:'+389'},
+  {c:'FR',n:'Γαλλία',d:'+33'},
+  {c:'DE',n:'Γερμανία',d:'+49'},
+  {c:'GE',n:'Γεωργία',d:'+995'},
+  {c:'GM',n:'Γκάμπια',d:'+220'},
+  {c:'GH',n:'Γκάνα',d:'+233'},
+  {c:'GA',n:'Γκαμπόν',d:'+241'},
+  {c:'GT',n:'Γουατεμάλα',d:'+502'},
+  {c:'GY',n:'Γουιάνα',d:'+592'},
+  {c:'GN',n:'Γουινέα',d:'+224'},
+  {c:'GW',n:'Γουινέα-Μπισάου',d:'+245'},
+  {c:'GD',n:'Γρενάδα',d:'+1'},
+  {c:'DK',n:'Δανία',d:'+45'},
+  {c:'DO',n:'Δομινικανή Δημ.',d:'+1'},
+  {c:'SV',n:'Ελ Σαλβαδόρ',d:'+503'},
+  {c:'CH',n:'Ελβετία',d:'+41'},
+  {c:'ER',n:'Ερυθραία',d:'+291'},
+  {c:'EE',n:'Εσθονία',d:'+372'},
+  {c:'ZM',n:'Ζάμπια',d:'+260'},
+  {c:'ZW',n:'Ζιμπάμπουε',d:'+263'},
+  {c:'US',n:'ΗΠΑ',d:'+1'},
+  {c:'AE',n:'Ηνωμ. Αραβ. Εμιράτα',d:'+971'},
+  {c:'GB',n:'Ηνωμένο Βασίλειο',d:'+44'},
+  {c:'JP',n:'Ιαπωνία',d:'+81'},
+  {c:'IN',n:'Ινδία',d:'+91'},
+  {c:'ID',n:'Ινδονησία',d:'+62'},
+  {c:'JO',n:'Ιορδανία',d:'+962'},
+  {c:'IQ',n:'Ιράκ',d:'+964'},
+  {c:'IR',n:'Ιράν',d:'+98'},
+  {c:'IE',n:'Ιρλανδία',d:'+353'},
+  {c:'GQ',n:'Ισημ. Γουινέα',d:'+240'},
+  {c:'EC',n:'Ισημερινός',d:'+593'},
+  {c:'IS',n:'Ισλανδία',d:'+354'},
+  {c:'ES',n:'Ισπανία',d:'+34'},
+  {c:'IL',n:'Ισραήλ',d:'+972'},
+  {c:'IT',n:'Ιταλία',d:'+39'},
+  {c:'KE',n:'Κένυα',d:'+254'},
+  {c:'CN',n:'Κίνα',d:'+86'},
+  {c:'KZ',n:'Καζακστάν',d:'+7'},
+  {c:'CM',n:'Καμερούν',d:'+237'},
+  {c:'KH',n:'Καμπότζη',d:'+855'},
+  {c:'CA',n:'Καναδάς',d:'+1'},
+  {c:'QA',n:'Κατάρ',d:'+974'},
+  {c:'CF',n:'Κεντροαφρικανική Δημ.',d:'+236'},
+  {c:'KG',n:'Κιργιστάν',d:'+996'},
+  {c:'KI',n:'Κιριμπάτι',d:'+686'},
+  {c:'CO',n:'Κολομβία',d:'+57'},
+  {c:'KM',n:'Κομόρες',d:'+269'},
+  {c:'CG',n:'Κονγκό',d:'+242'},
+  {c:'KW',n:'Κουβέιτ',d:'+965'},
+  {c:'CU',n:'Κούβα',d:'+53'},
+  {c:'HR',n:'Κροατία',d:'+385'},
+  {c:'CR',n:'Κόστα Ρίκα',d:'+506'},
+  {c:'CD',n:'Λ.Δ. Κονγκό',d:'+243'},
+  {c:'LA',n:'Λάος',d:'+856'},
+  {c:'LB',n:'Λίβανος',d:'+961'},
+  {c:'LS',n:'Λεσότο',d:'+266'},
+  {c:'LV',n:'Λετονία',d:'+371'},
+  {c:'BY',n:'Λευκορωσία',d:'+375'},
+  {c:'LR',n:'Λιβερία',d:'+231'},
+  {c:'LY',n:'Λιβύη',d:'+218'},
+  {c:'LT',n:'Λιθουανία',d:'+370'},
+  {c:'LI',n:'Λιχτενστάιν',d:'+423'},
+  {c:'LU',n:'Λουξεμβούργο',d:'+352'},
+  {c:'ML',n:'Μάλι',d:'+223'},
+  {c:'MT',n:'Μάλτα',d:'+356'},
+  {c:'MG',n:'Μαδαγασκάρη',d:'+261'},
+  {c:'MO',n:'Μακάο',d:'+853'},
+  {c:'MW',n:'Μαλάουι',d:'+265'},
+  {c:'MY',n:'Μαλαισία',d:'+60'},
+  {c:'MV',n:'Μαλδίβες',d:'+960'},
+  {c:'MA',n:'Μαρόκο',d:'+212'},
+  {c:'MU',n:'Μαυρίκιος',d:'+230'},
+  {c:'MR',n:'Μαυριτανία',d:'+222'},
+  {c:'ME',n:'Μαυροβούνιο',d:'+382'},
+  {c:'MX',n:'Μεξικό',d:'+52'},
+  {c:'MM',n:'Μιανμάρ',d:'+95'},
+  {c:'FM',n:'Μικρονησία',d:'+691'},
+  {c:'MN',n:'Μογγολία',d:'+976'},
+  {c:'MZ',n:'Μοζαμβίκη',d:'+258'},
+  {c:'MD',n:'Μολδαβία',d:'+373'},
+  {c:'MC',n:'Μονακό',d:'+377'},
+  {c:'BD',n:'Μπανγκλαντές',d:'+880'},
+  {c:'BB',n:'Μπαρμπάντος',d:'+1'},
+  {c:'BS',n:'Μπαχάμες',d:'+1'},
+  {c:'BH',n:'Μπαχρέιν',d:'+973'},
+  {c:'BZ',n:'Μπελίζ',d:'+501'},
+  {c:'BJ',n:'Μπενίν',d:'+229'},
+  {c:'BW',n:'Μποτσουάνα',d:'+267'},
+  {c:'BF',n:'Μπουρκίνα Φάσο',d:'+226'},
+  {c:'BI',n:'Μπουρούντι',d:'+257'},
+  {c:'BT',n:'Μπουτάν',d:'+975'},
+  {c:'BN',n:'Μπρουνέι',d:'+673'},
+  {c:'NZ',n:'Νέα Ζηλανδία',d:'+64'},
+  {c:'MH',n:'Νήσοι Μάρσαλ',d:'+692'},
+  {c:'SB',n:'Νήσοι Σολομώντος',d:'+677'},
+  {c:'NE',n:'Νίγηρας',d:'+227'},
+  {c:'NA',n:'Ναμίμπια',d:'+264'},
+  {c:'NR',n:'Ναουρού',d:'+674'},
+  {c:'NP',n:'Νεπάλ',d:'+977'},
+  {c:'NG',n:'Νιγηρία',d:'+234'},
+  {c:'NI',n:'Νικαράγουα',d:'+505'},
+  {c:'NO',n:'Νορβηγία',d:'+47'},
+  {c:'DM',n:'Ντομίνικα',d:'+1'},
+  {c:'ZA',n:'Νότια Αφρική',d:'+27'},
+  {c:'KR',n:'Νότια Κορέα',d:'+82'},
+  {c:'SS',n:'Νότιο Σουδάν',d:'+211'},
+  {c:'NL',n:'Ολλανδία',d:'+31'},
+  {c:'OM',n:'Ομάν',d:'+968'},
+  {c:'HN',n:'Ονδούρα',d:'+504'},
+  {c:'HU',n:'Ουγγαρία',d:'+36'},
+  {c:'UG',n:'Ουγκάντα',d:'+256'},
+  {c:'UZ',n:'Ουζμπεκιστάν',d:'+998'},
+  {c:'UA',n:'Ουκρανία',d:'+380'},
+  {c:'UY',n:'Ουρουγουάη',d:'+598'},
+  {c:'PK',n:'Πακιστάν',d:'+92'},
+  {c:'PW',n:'Παλάου',d:'+680'},
+  {c:'PA',n:'Παναμάς',d:'+507'},
+  {c:'PG',n:'Παπούα Ν. Γουινέα',d:'+675'},
+  {c:'PY',n:'Παραγουάη',d:'+595'},
+  {c:'PE',n:'Περού',d:'+51'},
+  {c:'PL',n:'Πολωνία',d:'+48'},
+  {c:'PT',n:'Πορτογαλία',d:'+351'},
+  {c:'CV',n:'Πράσινο Ακρωτήριο',d:'+238'},
+  {c:'RW',n:'Ρουάντα',d:'+250'},
+  {c:'RO',n:'Ρουμανία',d:'+40'},
+  {c:'RU',n:'Ρωσία',d:'+7'},
+  {c:'ST',n:'Σάο Τομέ',d:'+239'},
+  {c:'WS',n:'Σαμόα',d:'+685'},
+  {c:'SA',n:'Σαουδική Αραβία',d:'+966'},
+  {c:'SN',n:'Σενεγάλη',d:'+221'},
+  {c:'RS',n:'Σερβία',d:'+381'},
+  {c:'SC',n:'Σεϋχέλλες',d:'+248'},
+  {c:'SL',n:'Σιέρα Λεόνε',d:'+232'},
+  {c:'SG',n:'Σιγκαπούρη',d:'+65'},
+  {c:'SK',n:'Σλοβακία',d:'+421'},
+  {c:'SI',n:'Σλοβενία',d:'+386'},
+  {c:'SO',n:'Σομαλία',d:'+252'},
+  {c:'SD',n:'Σουδάν',d:'+249'},
+  {c:'SE',n:'Σουηδία',d:'+46'},
+  {c:'SR',n:'Σουρινάμ',d:'+597'},
+  {c:'LK',n:'Σρι Λάνκα',d:'+94'},
+  {c:'SY',n:'Συρία',d:'+963'},
+  {c:'TZ',n:'Τανζανία',d:'+255'},
+  {c:'TJ',n:'Τατζικιστάν',d:'+992'},
+  {c:'TW',n:'Ταϊβάν',d:'+886'},
+  {c:'TH',n:'Ταϊλάνδη',d:'+66'},
+  {c:'JM',n:'Τζαμάικα',d:'+1'},
+  {c:'DJ',n:'Τζιμπουτί',d:'+253'},
+  {c:'TV',n:'Τουβαλού',d:'+688'},
+  {c:'TR',n:'Τουρκία',d:'+90'},
+  {c:'TM',n:'Τουρκμενιστάν',d:'+993'},
+  {c:'TT',n:'Τρινιντάντ',d:'+1'},
+  {c:'TD',n:'Τσαντ',d:'+235'},
+  {c:'CZ',n:'Τσεχία',d:'+420'},
+  {c:'TN',n:'Τυνησία',d:'+216'},
+  {c:'TG',n:'Τόγκο',d:'+228'},
+  {c:'TO',n:'Τόνγκα',d:'+676'},
+  {c:'YE',n:'Υεμένη',d:'+967'},
+  {c:'FJ',n:'Φίτζι',d:'+679'},
+  {c:'PH',n:'Φιλιππίνες',d:'+63'},
+  {c:'FI',n:'Φινλανδία',d:'+358'},
+  {c:'CL',n:'Χιλή',d:'+56'},
+  {c:'HK',n:'Χονγκ Κονγκ',d:'+852'},
+];
+
+function flagUrl(code){ return 'https://flagcdn.com/w40/' + code.toLowerCase() + '.png'; }
+
+const ccBtn = document.getElementById('ccBtn');
+const ccList = document.getElementById('ccList');
+const ccItems = document.getElementById('ccItems');
+const ccSearch = document.getElementById('ccSearch');
+
+function renderCountries(filter){
+  const q = (filter || '').trim().toLowerCase();
+  ccItems.innerHTML = '';
+  COUNTRIES.filter(co =>
+    !q || co.n.toLowerCase().includes(q) || co.d.includes(q) || co.c.toLowerCase().includes(q)
+  ).forEach(co=>{
+    const row = document.createElement('div');
+    row.className = 'cc-item';
+    row.innerHTML = '<img class="flag" src="'+flagUrl(co.c)+'" width="22" alt="'+co.c+'">' +
+                    '<span class="nm">'+co.n+'</span>' +
+                    '<span class="dc">'+co.d+'</span>';
+    row.addEventListener('click', ()=>{
+      state.dialCode = co.d; state.country = co.c;
+      document.getElementById('ccFlag').src = flagUrl(co.c);
+      document.getElementById('ccFlag').alt = co.c;
+      document.getElementById('ccCode').textContent = co.d;
+      ccList.classList.remove('open');
+      scheduleEstimate();
+    });
+    ccItems.appendChild(row);
+  });
+}
+ccBtn.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  const open = ccList.classList.toggle('open');
+  if (open){ renderCountries(''); ccSearch.value=''; setTimeout(()=>ccSearch.focus(),50); }
+});
+ccSearch.addEventListener('input', ()=>renderCountries(ccSearch.value));
+ccSearch.addEventListener('click', (e)=>e.stopPropagation());
+document.addEventListener('click', (e)=>{
+  if (!ccBtn.contains(e.target) && !ccList.contains(e.target)) ccList.classList.remove('open');
+});
+
+/* ---- Scrollable time picker (5λεπτα intervals) ---- */
+(function(){
+  const wrap = document.querySelector('.time-wrap');
+  const input = document.getElementById('time');
+  const scroll = document.getElementById('timeScroll');
+  if (!wrap || !input || !scroll) return;
+
+  for (let h=0; h<24; h++){
+    for (let m=0; m<60; m+=5){
+      const hh = String(h).padStart(2,'0');
+      const mm = String(m).padStart(2,'0');
+      const val = hh+':'+mm;
+      const opt = document.createElement('div');
+      opt.className = 'time-opt';
+      opt.textContent = val;
+      opt.dataset.val = val;
+      opt.addEventListener('click', ()=>{
+        input.value = val;
+        scroll.querySelectorAll('.time-opt').forEach(o=>o.classList.remove('sel'));
+        opt.classList.add('sel');
+        wrap.classList.remove('open');
+        if (typeof scheduleEstimate === 'function') scheduleEstimate();
+      });
+      scroll.appendChild(opt);
+    }
+  }
+
+  input.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const wasOpen = wrap.classList.contains('open');
+    wrap.classList.toggle('open');
+    if (!wasOpen){
+      const sel = scroll.querySelector('.time-opt.sel') || scroll.querySelector('.time-opt');
+      if (sel) setTimeout(()=>{ sel.scrollIntoView({block:'center'}); }, 20);
+    }
+  });
+  document.addEventListener('click', (e)=>{
+    if (!wrap.contains(e.target)) wrap.classList.remove('open');
+  });
+})();
+
+document.getElementById('date').addEventListener('change', scheduleEstimate);
+
+// Μόλις ο πελάτης γράψει το όνομά του (σαφής ένδειξη πρόθεσης κράτησης),
+// ζητάμε τα δεδομένα χάρτη/απόστασης που πριν δεν είχαμε ζητήσει.
+let _nameWasFilled = false;
+document.getElementById('name').addEventListener('input', ()=>{
+  const filled = !!document.getElementById('name').value.trim();
+  if (filled && !_nameWasFilled) scheduleEstimate();
+  _nameWasFilled = filled;
+});
+
+/* ---- Συχνές διαδρομές (γνωστοί πελάτες) — ΕΝΣΩΜΑΤΩΜΕΝΟΙ μέσα στη λίστα
+   αυτόματης συμπλήρωσης, ίδιο με το Android app. ---- */
+let _frequentClients = [];
+async function loadFrequentClients(){
+  try{
+    const res = await fetch(CLIENTS_ENDPOINT, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ tenantId: EFORM_ID }),
+    });
+    const j = await res.json();
+    if (!j.ok || !Array.isArray(j.clients)) return;
+    _frequentClients = j.clients;
+  }catch(e){ console.error('loadFrequentClients error:', e); }
+}
+
+function matchingClients(query){
+  const q = (query || '').trim().toLowerCase();
+  if (!_frequentClients.length) return [];
+  if (!q) return _frequentClients;
+  return _frequentClients.filter(c => (c.name || '').toLowerCase().includes(q));
+}
+
+
+/* ---- Στοιχεία επιχείρησης (τηλέφωνο/email/λογότυπο/WhatsApp) — φορτώνονται
+   αυτόματα από τις Ρυθμίσεις που έβαλε ο ιδιοκτήτης στο web app. ---- */
+let _tenantWhatsappNumber = '';
+async function loadTenantBusinessInfo(){
+  try{
+    const res = await fetch('https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/getTenantBusinessInfo', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ tenantId: EFORM_ID }),
+    });
+    const j = await res.json();
+    if (!j.ok) return;
+    if (j.logoUrl){ const img = document.getElementById('brandLogo'); if (img) img.src = j.logoUrl; }
+    if (j.contactPhone){
+      const el = document.getElementById('footerPhone');
+      if (el){ el.href = 'tel:' + j.contactPhone.replace(/\s+/g,''); el.textContent = j.contactPhone; }
+    }
+    if (j.contactEmail){
+      const el = document.getElementById('footerEmail');
+      if (el){ el.href = 'mailto:' + j.contactEmail; el.textContent = j.contactEmail; }
+    }
+    if (j.whatsappNumber){ _tenantWhatsappNumber = j.whatsappNumber.replace(/[^0-9]/g,''); }
+  }catch(e){ console.error('loadTenantBusinessInfo error:', e); }
+}
+
+loadFrequentClients();
+loadTenantBusinessInfo();
+
+render();
+</script>
+
+<!-- Google Maps JavaScript API (Places New) — referrer-restricted στο domain.
+     Φορτώνει async· οι βιβλιοθήκες (places/core/geocoding) έρχονται με
+     importLibrary μέσα στο initBooking. -->
+<script async
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBW2YdAX_5beQrjkKmNyykTMqRixc-K88Y&loading=async&libraries=places,core,geocoding,geometry&callback=initBooking&region=GR&language=el">
+</script>
+
+<footer style="max-width:760px;margin:30px auto 0;padding:16px 18px calc(16px + env(safe-area-inset-bottom));text-align:center;font-size:.78rem;color:var(--text-muted);border-top:1px solid var(--field-border);">
+  <div style="margin-bottom:8px;">
+    <a href="terms.html" style="color:inherit;text-decoration:none;margin:0 8px;">Όροι &amp; Προϋποθέσεις</a> ·
+    <a href="privacy-policy.html" style="color:inherit;text-decoration:none;margin:0 8px;">Πολιτική Απορρήτου</a>
+  </div>
+  <div>
+    <i class="fas fa-phone"></i> <a href="tel:+30XXXXXXXXXX" id="footerPhone" style="color:inherit;text-decoration:none;">+30 XXX XXX XXXX</a>
+    &nbsp;·&nbsp;
+    <i class="fas fa-envelope"></i> <a href="mailto:info@example.com" id="footerEmail" style="color:inherit;text-decoration:none;">info@example.com</a>
+  </div>
+  <div style="margin-top:8px;opacity:.7;">&copy; 2026 Taxi &amp; Van Transfers</div>
+</footer>
+</body>
+</html>
