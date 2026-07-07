@@ -8,8 +8,8 @@
 <meta name="robots" content="noindex">
 
 <!-- Favicons (ίδια με το site) -->
-<link rel="icon" type="image/jpeg" href="../logo.jpg">
-<link rel="apple-touch-icon" href="../logo.jpg">
+<link rel="icon" type="image/jpeg" href="/logo.jpg">
+<link rel="apple-touch-icon" href="/logo.jpg">
 
 <!-- ============================================================
      ΔΟΚΙΜΑΣΤΙΚΗ ΦΟΡΜΑ ΜΕΤΑΦΟΡΑΣ — booking.html
@@ -432,14 +432,14 @@ body.is-mobile .map-gps{display:flex;}
 <!-- ============ NAVBAR ============ -->
 <header class="navbar">
   <div class="logo">
-    <img src="../logo.jpg" alt="Logo Taxi & Van Transfers" class="brand-logo" id="brandLogo">
+    <img src="/logo.jpg" alt="Logo Taxi & Van Transfers" class="brand-logo" id="brandLogo">
     <div class="logo-text">Taxi <span>&amp; Van Transfers</span></div>
   </div>
   <div class="nav-actions">
     <!-- Language switcher: ίδιος με το site. ΦΑΣΗ 1: τα links δεν οδηγούν
          κάπου ακόμη (href="#") — όταν μεταφραστεί η σελίδα στις 14 γλώσσες,
          βάζουμε τα κανονικά paths (de/booking.html κ.λπ.). -->
-    <a href="../index.html?lang=en" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Switch to English">
+    <a href="/index.html?lang=en" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Switch to English">
       <img src="https://flagcdn.com/w20/gb.png" width="18"> EN
     </a>
   </div>
@@ -691,7 +691,7 @@ const VIVA_ORDER_ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunction
    διαβάζει αυτό το tenantId για να φορτώσει τις σωστές ζώνες/τιμές/Viva
    credentials του κάθε πελάτη — βλ. Cloud Functions Φάση 3.
    Ο δικός σου λογαριασμός ΠΑΝΤΑ "default". */
-const EFORM_ID = "seretis_form"; // ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο tenantId που έδωσες στο createTenant (π.χ. "rhodes_taxi")
+const EFORM_ID = "CHANGE_ME_EFORM_ID"; // ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο tenantId που έδωσες στο createTenant (π.χ. "rhodes_taxi")
 
 /* Όρια οχήματος (συμφωνημένη λογική) */
 const PERSON_VAN_THRESHOLD  = 5;  // άτομα >= 5 -> Βαν
