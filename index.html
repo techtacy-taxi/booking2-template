@@ -717,7 +717,7 @@ const VIVA_ORDER_ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunction
    διαβάζει αυτό το tenantId για να φορτώσει τις σωστές ζώνες/τιμές/Viva
    credentials του κάθε πελάτη — βλ. Cloud Functions Φάση 3.
    Ο δικός σου λογαριασμός ΠΑΝΤΑ "default". */
-const EFORM_ID = "seretis_from"; // ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο EformID που έδωσες στη «Νέα Online Φόρμα» (π.χ. "rhodes_taxi")
+const EFORM_ID = "seretis_form"; // ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο EformID που έδωσες στη «Νέα Online Φόρμα» (π.χ. "rhodes_taxi")
 
 /* Όρια οχήματος (συμφωνημένη λογική) */
 const PERSON_VAN_THRESHOLD  = 5;  // άτομα >= 5 -> Βαν
@@ -931,7 +931,7 @@ function renderRouteMap(){
 
 function reasonLabel(code){
   if (code==='blackout')       return 'Outside booking hours for this time';
-  if (code==='lead_time')      return 'Less than 2 hours notice';
+  if (code==='lead_time')      return 'Too soon — needs more advance notice';
   if (code==='large_order')    return 'Large order — needs personal confirmation';
   if (code==='outside_attica') return 'Trip outside Attica — needs personal confirmation';
   if (code==='van_capacity')   return 'More than 8 people — the Van seats up to 8, you need a Mini Bus. Please contact us';
