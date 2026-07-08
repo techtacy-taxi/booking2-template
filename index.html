@@ -1383,7 +1383,7 @@ async function fetchSuggestions(id, q){
       sessionToken: acSessionToken,
       includedRegionCodes: ['gr'],      // ΜΟΝΟ Ελλάδα
       locationBias: bounds,
-      language: 'el',
+      language: 'en',
     };
     const { suggestions } =
       await AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
