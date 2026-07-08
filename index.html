@@ -428,25 +428,30 @@ body.is-mobile .map-gps{display:flex;}
 </style>
 </head>
 <body>
-<div id="langSuggestBanner" style="display:none;background:#112240;color:#e6f1ff;padding:10px 16px;text-align:center;font-size:.85rem;position:relative;">
-  <span>🇬🇷 Φαίνεται πως προτιμάς Ελληνικά — <a href="/EL/booking2.html" style="color:#ffd700;font-weight:600;text-decoration:underline;">μετάβαση στα Ελληνικά</a></span>
-  <button onclick="document.getElementById('langSuggestBanner').style.display='none'; try{localStorage.setItem('langBannerDismissed','1');}catch(e){}"
-    style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#8aa0c4;font-size:1.1rem;cursor:pointer;padding:0 6px;">×</button>
-</div>
 <script>
-// ── Πρόταση γλώσσας (ΧΩΡΙΣ βίαιη ανακατεύθυνση) ────────────────────────────
-// Αν ο browser έχει Ελληνικά, δείχνουμε ένα διακριτικό μπάνερ με σύνδεσμο
-// προς την ελληνική έκδοση — ο επισκέπτης αποφασίζει μόνος του. Δεν κάνει
-// ΠΟΤΕ αυτόματη ανακατεύθυνση, άρα δεν υπάρχει κίνδυνος βρόχου.
+// ── Γλώσσα: αυτόματη ΜΟΝΟ στην πρώτη επίσκεψη, μετά θυμάται πάντα ό,τι
+// διάλεξες (localStorage) — ώστε το κουμπί αλλαγής γλώσσας να δουλεύει
+// πάντα, χωρίς ποτέ να σε ξαναγυρίζει πίσω αυτόματα.
+// Κριτήριο: ΜΟΝΟ η γλώσσα του browser (navigator.language) — ΟΧΙ χώρα/IP.
 (function(){
   try {
-    if (localStorage.getItem('langBannerDismissed') === '1') return;
-    var langs = navigator.languages || [navigator.language || navigator.userLanguage || ''];
-    var isGreek = langs.some(function(l){ return /^el\b/i.test(l); });
-    if (isGreek) {
-      document.getElementById('langSuggestBanner').style.display = 'block';
+    var saved = localStorage.getItem('preferredLang');
+    if (saved === 'el') {
+      window.location.replace('/EL/booking2.html');
+      return;
     }
-  } catch(e) { /* αν κάτι πάει στραβά, απλά δεν δείχνουμε το μπάνερ */ }
+    if (!saved) {
+      var langs = navigator.languages || [navigator.language || navigator.userLanguage || ''];
+      var isGreek = langs.some(function(l){ return /^el\b/i.test(l); });
+      if (isGreek) {
+        localStorage.setItem('preferredLang', 'el');
+        window.location.replace('/EL/booking2.html');
+        return;
+      }
+      localStorage.setItem('preferredLang', 'en');
+    }
+    // saved === 'en' (ή μόλις αποθηκεύτηκε) → μένουμε εδώ, καμία ανακατεύθυνση.
+  } catch(e) { /* αν κάτι πάει στραβά, μένουμε απλά στα Αγγλικά */ }
 })();
 </script>
 
@@ -460,7 +465,7 @@ body.is-mobile .map-gps{display:flex;}
     <!-- Language switcher: ίδιος με το site. ΦΑΣΗ 1: τα links δεν οδηγούν
          κάπου ακόμη (href="#") — όταν μεταφραστεί η σελίδα στις 14 γλώσσες,
          βάζουμε τα κανονικά paths (de/booking.html κ.λπ.). -->
-    <a href="/EL/booking2.html" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Μετάβαση στα Ελληνικά">
+    <a href="/EL/booking2.html" onclick="try{localStorage.setItem('preferredLang','el');}catch(e){}" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Μετάβαση στα Ελληνικά">
       <img src="https://flagcdn.com/w20/gr.png" width="18"> EL
     </a>
   </div>
@@ -595,8 +600,8 @@ body.is-mobile .map-gps{display:flex;}
             <div class="phone-row">
               <div class="cc-wrap">
                 <div class="cc-btn" id="ccBtn">
-                  <img class="flag" id="ccFlag" src="https://flagcdn.com/w40/gr.png" width="22" alt="GR">
-                  <span id="ccCode">+30</span>
+                  <img class="flag" id="ccFlag" src="https://flagcdn.com/w40/gb.png" width="22" alt="GB">
+                  <span id="ccCode">+44</span>
                   <span class="chev"><i class="fas fa-chevron-down"></i></span>
                 </div>
                 <div class="cc-list" id="ccList">
@@ -723,7 +728,7 @@ const MIN = { persons:1, luggage:0,  seats:0 };
 
 const state = { persons:2, luggage:2, seats:0, veh:'taxi', autoVan:false,
   fromLat:null, fromLng:null, toLat:null, toLng:null,
-  dialCode:'+30', country:'GR', payFull:false };
+  dialCode:'+44', country:'GB', payFull:false };
 
 /* ---- Counters ---- */
 function clampStep(t,d){
@@ -1177,9 +1182,9 @@ function showVivaModal(success, html){
       }
       if (info.state){
         Object.assign(state, info.state);
-        document.getElementById('ccFlag').src = flagUrl(state.country || 'GR');
-        document.getElementById('ccFlag').alt = state.country || 'GR';
-        document.getElementById('ccCode').textContent = state.dialCode || '+30';
+        document.getElementById('ccFlag').src = flagUrl(state.country || 'GB');
+        document.getElementById('ccFlag').alt = state.country || 'GB';
+        document.getElementById('ccCode').textContent = state.dialCode || '+44';
         document.getElementById('payModeDeposit').classList.toggle('sel', !state.payFull);
         document.getElementById('payModeFull').classList.toggle('sel', !!state.payFull);
         render();

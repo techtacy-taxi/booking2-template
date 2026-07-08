@@ -428,6 +428,29 @@ body.is-mobile .map-gps{display:flex;}
 </style>
 </head>
 <body>
+<script>
+// ── Γλώσσα: αυτόματη ΜΟΝΟ στην πρώτη επίσκεψη, μετά θυμάται πάντα ό,τι
+// διάλεξες (localStorage) — ίδια λογική με το index.html.
+(function(){
+  try {
+    var saved = localStorage.getItem('preferredLang');
+    if (saved === 'en') {
+      window.location.replace('/index.html');
+      return;
+    }
+    if (!saved) {
+      var langs = navigator.languages || [navigator.language || navigator.userLanguage || ''];
+      var isGreek = langs.some(function(l){ return /^el\b/i.test(l); });
+      localStorage.setItem('preferredLang', isGreek ? 'el' : 'en');
+      if (!isGreek) {
+        window.location.replace('/index.html');
+        return;
+      }
+    }
+  } catch(e) { /* αν κάτι πάει στραβά, μένουμε στα Ελληνικά */ }
+})();
+</script>
+
 
 <!-- ============ NAVBAR ============ -->
 <header class="navbar">
@@ -439,7 +462,7 @@ body.is-mobile .map-gps{display:flex;}
     <!-- Language switcher: ίδιος με το site. ΦΑΣΗ 1: τα links δεν οδηγούν
          κάπου ακόμη (href="#") — όταν μεταφραστεί η σελίδα στις 14 γλώσσες,
          βάζουμε τα κανονικά paths (de/booking.html κ.λπ.). -->
-    <a href="/index.html" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Switch to English">
+    <a href="/index.html" onclick="try{localStorage.setItem('preferredLang','en');}catch(e){}" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Switch to English">
       <img src="https://flagcdn.com/w20/gb.png" width="18"> EN
     </a>
   </div>
