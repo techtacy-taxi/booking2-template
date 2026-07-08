@@ -717,7 +717,7 @@ const VIVA_ORDER_ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunction
    διαβάζει αυτό το tenantId για να φορτώσει τις σωστές ζώνες/τιμές/Viva
    credentials του κάθε πελάτη — βλ. Cloud Functions Φάση 3.
    Ο δικός σου λογαριασμός ΠΑΝΤΑ "default". */
-const EFORM_ID = "seretis_form"; // ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο tenantId που έδωσες στο createTenant (π.χ. "rhodes_taxi")
+const EFORM_ID = "CHANGE_ME_EFORM_ID"; // ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο EformID που έδωσες στη «Νέα Online Φόρμα» (π.χ. "rhodes_taxi")
 
 /* Όρια οχήματος (συμφωνημένη λογική) */
 const PERSON_VAN_THRESHOLD  = 5;  // άτομα >= 5 -> Βαν
@@ -877,6 +877,10 @@ function fmtMinutes(min){
 
 function renderRouteMap(){
   const wrap = document.getElementById('routeMapWrap');
+  // Ο διακόπτης master ισχύει ΜΟΝΟ όταν χρησιμοποιείται το ΔΙΚΟ ΜΑΣ (fallback)
+  // κλειδί — αν ο tenant έχει βάλει το δικό του, δουλεύει πάντα κανονικά
+  // (το κόστος πλέον πάει σε αυτόν, όχι σε μας).
+  if (!_mapEnabled && !_tenantMapsApiKey){ wrap.style.display = 'none'; return; }
   const nameFilled = !!document.getElementById('name').value.trim();
   const hasRoute = nameFilled &&
                    state.fromLat!=null && state.fromLng!=null &&
@@ -1264,6 +1268,11 @@ async function initBooking(){
     inp.addEventListener('blur', ()=>setTimeout(()=>closeAc(id), 180));
     inp.addEventListener('focus', ()=>{ if (!inp.value.trim()) renderSuggestions(id, []); });
   });
+
+  // Ασφαλιστικό: αν ο χρήστης είχε ήδη συμπληρώσει στοιχεία ΠΡΙΝ προλάβει
+  // να φορτώσει το Google Maps (δυναμική φόρτωση, όχι πια στατικό script),
+  // ξανατρέχουμε τώρα τον υπολογισμό ώστε να εμφανιστεί ο χάρτης.
+  if (typeof renderRouteMap === 'function') renderRouteMap();
 }
 
 function newSession(){
@@ -1286,6 +1295,7 @@ function onAcInput(id){
   renderSuggestions(id, []);
 
   if (q.length < 3){ return; }   // Places autocomplete ξεκινά από 3 χαρακτήρες
+  if (!_placesEnabled && !_tenantMapsApiKey){ return; }  // Ο master έχει κόψει το Google Places γι' αυτή τη φόρμα (μόνο με το δικό μας κλειδί)
   if (PLUS_CODE_RE.test(q)){ st.timer = setTimeout(()=>fetchPlusCode(id, q), 280); return; }
   st.timer = setTimeout(()=>fetchSuggestions(id, q), 280);
 }
@@ -2009,6 +2019,9 @@ function matchingClients(query){
 /* ---- Στοιχεία επιχείρησης (τηλέφωνο/email/λογότυπο/WhatsApp) — φορτώνονται
    αυτόματα από τις Ρυθμίσεις που έβαλε ο ιδιοκτήτης στο web app. ---- */
 let _tenantWhatsappNumber = '';
+let _mapEnabled = true;
+let _placesEnabled = true;
+let _tenantMapsApiKey = null;
 async function loadTenantBusinessInfo(){
   try{
     const res = await fetch('https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/getTenantBusinessInfo', {
@@ -2028,20 +2041,36 @@ async function loadTenantBusinessInfo(){
       if (el){ el.href = 'mailto:' + j.contactEmail; el.textContent = j.contactEmail; }
     }
     if (j.whatsappNumber){ _tenantWhatsappNumber = j.whatsappNumber.replace(/[^0-9]/g,''); }
-  }catch(e){ console.error('loadTenantBusinessInfo error:', e); }
+    // Διακόπτες master — αν οποιοσδήποτε έχει κοπεί, ενημέρωσε αμέσως το UI.
+    _mapEnabled = j.mapEnabled !== false;
+    _placesEnabled = j.placesEnabled !== false;
+    if (!_mapEnabled) renderRouteMap();
+    if (j.mapsApiKey) _tenantMapsApiKey = j.mapsApiKey;
+  }catch(e){
+    console.error('loadTenantBusinessInfo error:', e);
+  } finally {
+    // Φόρτωσε το Google Maps ό,τι κι αν έγινε παραπάνω (fallback στο δικό
+    // μας κλειδί αν κάτι απέτυχε ή ο tenant δεν έχει βάλει δικό του).
+    loadGoogleMapsScript(_tenantMapsApiKey);
+  }
+}
+
+// Φορτώνει το Google Maps JavaScript API δυναμικά (μόλις ξέρουμε ΠΟΙΟ
+// κλειδί να χρησιμοποιήσουμε) — έτσι κάθε tenant μπορεί να βάλει το δικό
+// του, χωρίς να αγγίζει κώδικα, από τις Ρυθμίσεις Viva στο web app.
+function loadGoogleMapsScript(tenantKey){
+  const key = tenantKey || 'AIzaSyBW2YdAX_5beQrjkKmNyykTMqRixc-K88Y'; // fallback: δικό μας κλειδί
+  const script = document.createElement('script');
+  script.async = true;
+  script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(key) +
+    '&loading=async&libraries=places,core,geocoding,geometry&callback=initBooking&region=GR&language=el';
+  document.head.appendChild(script);
 }
 
 loadFrequentClients();
 loadTenantBusinessInfo();
 
 render();
-</script>
-
-<!-- Google Maps JavaScript API (Places New) — referrer-restricted στο domain.
-     Φορτώνει async· οι βιβλιοθήκες (places/core/geocoding) έρχονται με
-     importLibrary μέσα στο initBooking. -->
-<script async
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBW2YdAX_5beQrjkKmNyykTMqRixc-K88Y&loading=async&libraries=places,core,geocoding,geometry&callback=initBooking&region=GR&language=el">
 </script>
 
 <footer style="max-width:760px;margin:30px auto 0;padding:16px 18px calc(16px + env(safe-area-inset-bottom));text-align:center;font-size:.78rem;color:var(--text-muted);border-top:1px solid var(--field-border);">
