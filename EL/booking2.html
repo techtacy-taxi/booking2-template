@@ -686,7 +686,7 @@ body.is-mobile .map-gps{display:flex;}
   </div>
 </div>
 
-<div class="foot">© <!-- ⚠️ ΒΑΛΕ ΕΔΩ το όνομα της επιχείρησής σου --> Το Όνομα Της Επιχείρησής Σου</div>
+<div class="foot">© <span id="footBusinessName"><!-- ⚠️ ΒΑΛΕ ΕΔΩ το όνομα της επιχείρησής σου --> Το Όνομα Της Επιχείρησής Σου</span></div>
 
 <script>
 /* ====== ΑΝΙΧΝΕΥΣΗ ΚΙΝΗΤΟΥ (για το κουμπί GPS) ====== */
@@ -2028,6 +2028,10 @@ async function loadTenantBusinessInfo(){
     const j = await res.json();
     if (!j.ok) return;
     if (j.logoUrl){ const img = document.getElementById('brandLogo'); if (img) img.src = j.logoUrl; }
+    if (j.businessName){
+      const el = document.getElementById('footBusinessName');
+      if (el){ el.textContent = j.businessName; }
+    }
     if (j.contactPhone){
       const el = document.getElementById('footerPhone');
       if (el){ el.href = 'tel:' + j.contactPhone.replace(/\s+/g,''); el.textContent = j.contactPhone; }
