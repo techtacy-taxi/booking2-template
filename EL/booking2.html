@@ -1139,9 +1139,17 @@ async function ensureWhatsappNumber(){
      αποτυχία: ?eventId=<id>  (χωρίς t)    (η πληρωμή ΔΕΝ έγινε) */
 (async function handleVivaReturn(){
   const params = new URLSearchParams(window.location.search);
-  const t = params.get('t');
-  const eventId = params.get('eventId');
-  if (!t && !eventId) return; // δεν ήρθαμε από Viva redirect — κανονική φόρτωση φόρμας
+  // Η Viva επιστρέφει με διάφορα param names ανά setup: 't' (transactionId),
+  // 's' (orderCode), 'transactionId'. ΕΠΙΤΥΧΙΑ = υπάρχει transaction id.
+  // ΑΠΟΤΥΧΙΑ = υπάρχει μόνο eventId/lang χωρίς transaction.
+  const t = params.get('t') || params.get('transactionId') || params.get('TransactionId');
+  const eventId = params.get('eventId') || params.get('EventId');
+  const orderCode = params.get('s') || params.get('orderCode') || params.get('OrderCode');
+  // Αν δεν υπάρχει ΚΑΝΕΝΑ σχετικό param → κανονική φόρτωση φόρμας.
+  if (!t && !eventId && !orderCode) return;
+  // Θεωρούμε επιτυχία αν υπάρχει transaction id Ή orderCode χωρίς ρητό eventId
+  // αποτυχίας (η Viva στέλνει orderCode στο success redirect).
+  const isSuccess = !!t || (!!orderCode && !eventId);
 
   let info = null;
   try{ info = JSON.parse(sessionStorage.getItem('athenstaxi_pending_booking') || 'null'); }catch(e){}
@@ -1152,9 +1160,9 @@ async function ensureWhatsappNumber(){
   const amt  = info && info.depositAmount ? fmtEUR(info.depositAmount) : '-';
 
   const box = document.createElement('div');
-  box.className = 'viva-result-banner ' + (t ? 'ok' : 'fail');
+  box.className = 'viva-result-banner ' + (isSuccess ? 'ok' : 'fail');
 
-  if (t){
+  if (isSuccess){
     // ── ΕΠΙΤΥΧΙΑ ─────────────────────────────────────────────────────────
     const wa = await ensureWhatsappNumber();
     const waHtml = wa
