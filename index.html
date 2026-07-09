@@ -1121,12 +1121,27 @@ function showVivaModal(success, html){
   overlay.addEventListener('click', (e)=>{ if (e.target === overlay) close(); });
 }
 
+/* ---- Εξασφαλίζει ότι έχουμε το WhatsApp number πριν φτιάξουμε το μήνυμα
+   επιτυχίας (αν δεν έχει προλάβει να φορτώσει το loadTenantBusinessInfo). ---- */
+async function ensureWhatsappNumber(){
+  if (_tenantWhatsappNumber) return _tenantWhatsappNumber;
+  try{
+    const res = await fetch('https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/getTenantBusinessInfo', {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ tenantId: EFORM_ID }),
+    });
+    const j = await res.json();
+    if (j.ok && j.whatsappNumber) _tenantWhatsappNumber = j.whatsappNumber.replace(/[^0-9]/g,'');
+  }catch(e){}
+  return _tenantWhatsappNumber;
+}
+
 /* ---- Αποτέλεσμα επιστροφής από τη Viva (Success/Failure URL) ----
    Ρύθμισε αυτή τη σελίδα ως Success URL ΚΑΙ ως Failure URL στο Source του
    Viva dashboard. Η Viva προσθέτει query params όταν επιστρέφει:
      επιτυχία: ?t=<transactionId>          (η πληρωμή έγινε)
      αποτυχία: ?eventId=<id>  (χωρίς t)    (η πληρωμή ΔΕΝ έγινε) */
-(function handleVivaReturn(){
+(async function handleVivaReturn(){
   const params = new URLSearchParams(window.location.search);
   const t = params.get('t');
   const eventId = params.get('eventId');
@@ -1145,19 +1160,25 @@ function showVivaModal(success, html){
 
   if (t){
     // ── ΕΠΙΤΥΧΙΑ ─────────────────────────────────────────────────────────
+    const wa = await ensureWhatsappNumber();
+    const waHtml = wa
+      ? 'From now on, communication will happen via WhatsApp: ' +
+        '<a href="https://wa.me/' + wa + '" target="_blank" ' +
+        'style="color:inherit;font-weight:700;text-decoration:underline;">+' + wa + '</a>'
+      : 'From now on, communication will happen via WhatsApp.';
     box.innerHTML =
       '<div class="vrb-title"><i class="fas fa-check-circle"></i> BOOKING CONFIRMED — deposit paid</div>' +
       '<div class="vrb-row"><span class="k">Route:</span><span>' + from + ' → ' + to + '</span></div>' +
       '<div class="vrb-row"><span class="k">Date/time:</span><span>' + when + '</span></div>' +
       '<div class="vrb-row"><span class="k">Paid:</span><span>' + amt + '</span></div>' +
-      '<div class="vrb-row" style="margin-top:8px;">We will contact you shortly to confirm.</div>';
+      '<div class="vrb-row" style="margin-top:8px;">' + waHtml + '</div>';
     document.getElementById('actionArea').style.display = 'none';
     document.getElementById('depositBanner').style.display = 'none';
 
     showVivaModal(true,
       '<div class="viva-modal-title">Payment completed!</div>' +
       '<div class="viva-modal-text">Your booking <b>' + from + ' → ' + to + '</b> is confirmed.<br>' +
-      'You paid <b>' + amt + '</b> as a deposit. We will contact you shortly.</div>');
+      'You paid <b>' + amt + '</b> as a deposit. ' + waHtml + '</div>');
 
     try{ sessionStorage.removeItem('athenstaxi_pending_booking'); }catch(e){}
 
@@ -1201,6 +1222,13 @@ function showVivaModal(success, html){
 
   const cardEl = document.querySelector('.card');
   if (cardEl) cardEl.parentNode.insertBefore(box, cardEl.nextSibling);
+
+  // ── Καθάρισμα του ?t=/?eventId= από το URL — ΚΡΙΣΙΜΟ: αν μείνει, μια νέα
+  // πληρωμή αργότερα (χωρίς πλήρες reload, π.χ. browser back/forward ή
+  // επαναφορά PWA στο προσκήνιο) μπορεί να ξαναδιαβάσει το ΠΑΛΙΟ ?t= και να
+  // δείξει ξανά το παλιό αποτέλεσμα σαν να είναι νέο (ή να μπερδέψει τον
+  // πελάτη ότι «βλέπει την παλιά πληρωμή»).
+  try{ window.history.replaceState({}, document.title, window.location.pathname); }catch(e){}
 })();
 function resetForm(){
   ['from','to','date','time','name','phone','email','flight','note'].forEach(id=>document.getElementById(id).value='');
