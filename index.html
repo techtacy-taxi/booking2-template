@@ -1142,10 +1142,12 @@ async function ensureWhatsappNumber(){
      επιτυχία: ?t=<transactionId>          (η πληρωμή έγινε)
      αποτυχία: ?eventId=<id>  (χωρίς t)    (η πληρωμή ΔΕΝ έγινε) */
 (async function handleVivaReturn(){
+try{
   const params = new URLSearchParams(window.location.search);
   const t = params.get('t') || params.get('transactionId') || params.get('TransactionId');
   const eventId = params.get('eventId') || params.get('EventId');
   const orderCode = params.get('s') || params.get('orderCode') || params.get('OrderCode');
+  console.log('[handleVivaReturn] params:', { t, eventId, orderCode, search: window.location.search });
   if (!t && !eventId && !orderCode) return;
   const isSuccess = !!t || (!!orderCode && !eventId);
 
@@ -1159,10 +1161,12 @@ async function ensureWhatsappNumber(){
 
   const box = document.createElement('div');
   box.className = 'viva-result-banner ' + (isSuccess ? 'ok' : 'fail');
+  box.style.cssText = 'position:relative;z-index:9999;';
 
   if (isSuccess){
     // ── ΕΠΙΤΥΧΙΑ ─────────────────────────────────────────────────────────
-    const wa = await ensureWhatsappNumber();
+    let wa = '';
+    try { wa = await ensureWhatsappNumber(); } catch (e) { console.error('[handleVivaReturn] ensureWhatsappNumber failed:', e); }
     const waHtml = wa
       ? 'From now on, communication will happen via WhatsApp: ' +
         '<a href="https://wa.me/' + wa + '" target="_blank" ' +
@@ -1174,13 +1178,17 @@ async function ensureWhatsappNumber(){
       '<div class="vrb-row"><span class="k">Date/time:</span><span>' + when + '</span></div>' +
       '<div class="vrb-row"><span class="k">Paid:</span><span>' + amt + '</span></div>' +
       '<div class="vrb-row" style="margin-top:8px;">' + waHtml + '</div>';
-    document.getElementById('actionArea').style.display = 'none';
-    document.getElementById('depositBanner').style.display = 'none';
+    const actionAreaEl = document.getElementById('actionArea');
+    const depositBannerEl = document.getElementById('depositBanner');
+    if (actionAreaEl) actionAreaEl.style.display = 'none';
+    if (depositBannerEl) depositBannerEl.style.display = 'none';
 
-    showVivaModal(true,
-      '<div class="viva-modal-title">Payment completed!</div>' +
-      '<div class="viva-modal-text">Your booking <b>' + from + ' → ' + to + '</b> is confirmed.<br>' +
-      'You paid <b>' + amt + '</b> as a deposit. ' + waHtml + '</div>');
+    try {
+      showVivaModal(true,
+        '<div class="viva-modal-title">Payment completed!</div>' +
+        '<div class="viva-modal-text">Your booking <b>' + from + ' → ' + to + '</b> is confirmed.<br>' +
+        'You paid <b>' + amt + '</b> as a deposit. ' + waHtml + '</div>');
+    } catch (e) { console.error('[handleVivaReturn] showVivaModal failed:', e); }
 
     try{ sessionStorage.removeItem('athenstaxi_pending_booking'); }catch(e){}
 
@@ -1192,10 +1200,12 @@ async function ensureWhatsappNumber(){
       '<div class="vrb-row"><span class="k">Date/time:</span><span>' + when + '</span></div>' +
       '<div class="vrb-row" style="margin-top:8px;">The form below was auto-filled again — press the payment button to try again.</div>';
 
-    showVivaModal(false,
-      '<div class="viva-modal-title">Payment failed</div>' +
-      '<div class="viva-modal-text">The deposit for <b>' + from + ' → ' + to + '</b> was not completed.<br>' +
-      'The form stayed filled in — try again with another card.</div>');
+    try {
+      showVivaModal(false,
+        '<div class="viva-modal-title">Payment failed</div>' +
+        '<div class="viva-modal-text">The deposit for <b>' + from + ' → ' + to + '</b> was not completed.<br>' +
+        'The form stayed filled in — try again with another card.</div>');
+    } catch (e) { console.error('[handleVivaReturn] showVivaModal failed:', e); }
 
     // ── Ξαναγέμισμα όλων των πεδίων της φόρμας από το snapshot ──
     if (info){
@@ -1223,7 +1233,12 @@ async function ensureWhatsappNumber(){
   }
 
   const cardEl = document.querySelector('.card');
-  if (cardEl) cardEl.parentNode.insertBefore(box, cardEl.nextSibling);
+  if (cardEl && cardEl.parentNode) {
+    cardEl.parentNode.insertBefore(box, cardEl.nextSibling);
+  } else {
+    console.warn('[handleVivaReturn] δεν βρέθηκε .card — fallback insertion στην κορυφή του body');
+    document.body.insertBefore(box, document.body.firstChild);
+  }
 
   // ── Καθάρισμα του ?t=/?eventId= από το URL — ΚΡΙΣΙΜΟ: αν μείνει, μια νέα
   // πληρωμή αργότερα (χωρίς πλήρες reload, π.χ. browser back/forward ή
@@ -1231,6 +1246,15 @@ async function ensureWhatsappNumber(){
   // δείξει ξανά το παλιό αποτέλεσμα σαν να είναι νέο (ή να μπερδέψει τον
   // πελάτη ότι «βλέπει την παλιά πληρωμή»).
   try{ window.history.replaceState({}, document.title, window.location.pathname); }catch(e){}
+} catch (err) {
+  console.error('[handleVivaReturn] ΣΦΑΛΜΑ:', err);
+  try {
+    const fallback = document.createElement('div');
+    fallback.style.cssText = 'background:#c62828;color:#fff;padding:14px;margin:10px;border-radius:8px;font-size:14px;';
+    fallback.textContent = 'The payment was likely completed, but there was a technical issue showing the confirmation. Please contact us to confirm.';
+    document.body.insertBefore(fallback, document.body.firstChild);
+  } catch (e2) { /* nothing else we can do */ }
+}
 })();
 function resetForm(){
   ['from','to','date','time','name','phone','email','flight','note'].forEach(id=>document.getElementById(id).value='');
