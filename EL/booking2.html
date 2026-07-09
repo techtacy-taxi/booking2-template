@@ -793,6 +793,7 @@ document.getElementById('payModeFull').addEventListener('click', ()=>{
 let lastEstimate = { price:0, nightApplies:false, blocked:false, reasons:[],
   displayOriginal:0, discountPercent:8, minChargeApplied:false,
   distanceKm:0, durationMin:0, routePolyline:null };
+let _depositPercent = 10; // ενημερώνεται από το estimatePrice ανά tenant
 let estimateDebounce=null, estimateSeq=0;
 let _lastRouteSig = null; // cache: αλλαγή μόνο ημερομηνίας/ώρας δεν ξαναφέρνει Routes API
 
@@ -851,6 +852,7 @@ async function fetchEstimate(){
     lastEstimate = { price:j.price||0, nightApplies:!!j.nightApplies, blocked:!!j.blocked, reasons:j.reasons||[],
       displayOriginal:j.displayOriginal||0, discountPercent:j.discountPercent||8, minChargeApplied:!!j.minChargeApplied,
       distanceKm:j.distanceKm||0, durationMin:j.durationMin||0, routePolyline:j.routePolyline||null };
+    if (j.depositPercent > 0) _depositPercent = j.depositPercent;
     if (state.persons > 8){
       lastEstimate.blocked = true;
       lastEstimate.reasons = ['van_capacity', ...lastEstimate.reasons.filter(r => r !== 'van_capacity')];
@@ -980,18 +982,23 @@ function renderPrice(){
     document.getElementById('waLink').href = 'https://wa.me/' + (_tenantWhatsappNumber || 'YOUR_WHATSAPP_NUMBER') + '?text=' + encodeURIComponent(msg);
   }
 
-  // Ενδεικτικό ποσό πληρωμής — 10% (στρογγυλοποίηση πάνω στο επόμενο ευρώ)
-  // ή ολόκληρο το ποσό, ανάλογα με την επιλογή του πελάτη (state.payFull).
-  // Ο server (createVivaOrder) ξαναϋπολογίζει το επίσημο ποσό ούτως ή άλλως.
-  const depositEur = lastEstimate.price > 0 ? Math.ceil(lastEstimate.price * 0.10) : 0;
+  // Ενδεικτικό ποσό πληρωμής — ρυθμιζόμενο ποσοστό ανά tenant (προεπιλογή
+  // 10%), στρογγυλοποίηση πάνω στο επόμενο ευρώ — ή ολόκληρο το ποσό,
+  // ανάλογα με την επιλογή του πελάτη (state.payFull). Ο server
+  // (createVivaOrder) ξαναϋπολογίζει το επίσημο ποσό ούτως ή άλλως.
+  const depositEur = lastEstimate.price > 0 ? Math.ceil(lastEstimate.price * (_depositPercent / 100)) : 0;
   const fullEur    = lastEstimate.price > 0 ? Math.ceil(lastEstimate.price) : 0;
   const payAmt = state.payFull ? fullEur : depositEur;
   document.getElementById('depositTitle').textContent = state.payFull
     ? 'Πληρωμή ολόκληρου ποσού'
-    : 'Για την κράτηση απαιτείται προκαταβολή 10%';
+    : 'Για την κράτηση απαιτείται προκαταβολή ' + _depositPercent + '%';
   document.getElementById('depositAmtLine').innerHTML = state.payFull
     ? 'Θα πληρώσετε τώρα <b id="depositAmt">' + fmtEUR(payAmt) + '</b> μέσω ασφαλούς πληρωμής (Viva) — τίποτα άλλο στον οδηγό.'
     : 'Θα πληρώσετε τώρα <b id="depositAmt">' + fmtEUR(payAmt) + '</b> μέσω ασφαλούς πληρωμής (Viva) — το υπόλοιπο στον οδηγό.';
+  const depositModeBtn = document.getElementById('payModeDeposit');
+  if (depositModeBtn) {
+    depositModeBtn.innerHTML = 'Προκαταβολή ' + _depositPercent + '%<span class="pm-sub">το υπόλοιπο στον οδηγό</span>';
+  }
   if (!btn.disabled){
     setBtn('', '<i class="fas fa-credit-card"></i> ' + (state.payFull ? 'Πληρωμή ολόκληρου ποσού &amp; αποστολή' : 'Πληρωμή προκαταβολής &amp; αποστολή'));
   }
