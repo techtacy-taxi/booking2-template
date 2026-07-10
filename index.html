@@ -204,6 +204,16 @@ body{
 .veh div{font-size:.78rem;color:#cdd6ee;margin-top:3px;font-weight:600;}
 .veh.sel{background:var(--gold-gradient);border-color:var(--primary-color);}
 .veh.sel i,.veh.sel div{color:var(--dark-bg);}
+.veh-shuttle{display:flex;align-items:center;gap:12px;padding:14px;border-radius:var(--radius-sm);cursor:pointer;border:1.5px solid var(--field-border);background:var(--field-bg);margin-bottom:10px;transition:all .18s ease;}
+.veh-shuttle i{font-size:26px;color:#cdd6ee;flex-shrink:0;}
+.veh-shuttle-title{font-size:.88rem;font-weight:700;color:#cdd6ee;}
+.veh-shuttle-sub{font-size:.72rem;color:#8b98ad;margin-top:2px;}
+.veh-shuttle.sel{border-color:var(--primary-color);background:rgba(255,193,7,.12);animation:shuttleGlow 1.1s ease-in-out infinite;}
+.veh-shuttle.sel i,.veh-shuttle.sel .veh-shuttle-title{color:var(--primary-color);}
+@keyframes shuttleGlow{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,193,7,.55);}
+  50%{box-shadow:0 0 0 7px rgba(255,193,7,0);}
+}
 .auto-hint{color:var(--primary-color);font-size:.66rem;font-weight:600;}
 
 .van-msg{margin-top:11px;background:var(--dark-tertiary);border:1px solid var(--whatsapp);border-radius:11px;padding:13px 15px;display:none;animation:fadeIn .3s ease;}
@@ -588,6 +598,13 @@ body.is-mobile .map-gps{display:flex;}
 
           <div class="fld">
             <label style="margin-bottom:7px;">Vehicle type <span class="auto-hint" id="autoHint"></span></label>
+            <div class="veh-shuttle" id="vehShuttle" style="display:none;">
+              <i class="fas fa-shuttle-van"></i>
+              <div>
+                <div class="veh-shuttle-title">Shuttle service</div>
+                <div class="veh-shuttle-sub" id="vehShuttleSub">Arrival ±15 minutes from the time you set · price per person</div>
+              </div>
+            </div>
             <div class="veh-wrap">
               <div class="veh sel" id="vehTaxi"><i class="fas fa-car"></i><div>Taxi / Sedan</div></div>
               <div class="veh" id="vehVan"><i class="fas fa-shuttle-van"></i><div>Van</div></div>
@@ -728,7 +745,9 @@ const MIN = { persons:1, luggage:0,  seats:0 };
 
 const state = { persons:2, luggage:2, seats:0, veh:'taxi', autoVan:false,
   fromLat:null, fromLng:null, toLat:null, toLng:null,
-  dialCode:'+44', country:'GB', payFull:false };
+  dialCode:'+44', country:'GB', payFull:false,
+  shuttleAvailable:false, shuttlePricePerPerson:0, userPickedVeh:false,
+  clientHasShuttle:false, fromClientShuttle:false, toClientShuttle:false };
 
 /* ---- Counters ---- */
 function clampStep(t,d){
@@ -740,9 +759,21 @@ function recomputeVehicle(){
   state.autoVan = (state.persons >= PERSON_VAN_THRESHOLD ||
                    state.luggage >= LUGGAGE_VAN_THRESHOLD);
   if (state.autoVan){
-    state.veh = 'van';                 // κλειδώνει σε Βαν
-  } else if (wasAuto && !state.autoVan){
-    state.veh = 'taxi';                // έπεσε κάτω από το όριο -> ξανά Ταξί
+    if (state.veh !== 'shuttle') state.veh = 'van';
+  } else if (wasAuto && !state.autoVan && state.veh !== 'shuttle'){
+    state.veh = 'taxi';
+  }
+}
+function updateVehButtons(){
+  document.getElementById('vehTaxi').classList.toggle('sel', state.veh==='taxi');
+  document.getElementById('vehVan').classList.toggle('sel', state.veh==='van');
+  const shuttleBox = document.getElementById('vehShuttle');
+  const canShowShuttle = state.shuttleAvailable && state.clientHasShuttle;
+  shuttleBox.style.display = canShowShuttle ? 'flex' : 'none';
+  shuttleBox.classList.toggle('sel', state.veh==='shuttle');
+  if (canShowShuttle && state.shuttlePricePerPerson > 0){
+    document.getElementById('vehShuttleSub').textContent =
+      'Arrival ±15 minutes from the time you set · '+fmtEUR(state.shuttlePricePerPerson)+' /person';
   }
 }
 function render(){
@@ -756,8 +787,7 @@ function render(){
     const atMin = d<0 && state[t]<=MIN[t];
     b.classList.toggle('dis', atMax||atMin);
   });
-  document.getElementById('vehTaxi').classList.toggle('sel', state.veh==='taxi');
-  document.getElementById('vehVan').classList.toggle('sel', state.veh==='van');
+  updateVehButtons();
   document.getElementById('autoHint').textContent = state.autoVan ? '· Van suggested' : '';
   scheduleEstimate();
 }
@@ -773,10 +803,14 @@ document.querySelectorAll('.stp').forEach(b=>{
 
 document.getElementById('vehTaxi').addEventListener('click', ()=>{
   if (state.autoVan) return;   // κλειδωμένο σε Βαν — βλ. actionArea/waArea
-  state.veh='taxi'; render();
+  state.veh='taxi'; state.userPickedVeh=true; render();
 });
 document.getElementById('vehVan').addEventListener('click', ()=>{
-  state.veh='van'; render();
+  state.veh='van'; state.userPickedVeh=true; render();
+});
+document.getElementById('vehShuttle').addEventListener('click', ()=>{
+  if (!state.shuttleAvailable) return;
+  state.veh='shuttle'; state.userPickedVeh=true; render();
 });
 
 document.getElementById('payModeDeposit').addEventListener('click', ()=>{
@@ -853,9 +887,18 @@ async function fetchEstimate(){
     const j = await res.json();
     if (!j.ok) throw new Error(j.error || 'estimate_error');
     lastEstimate = { price:j.price||0, nightApplies:!!j.nightApplies, blocked:!!j.blocked, reasons:j.reasons||[],
-      displayOriginal:j.displayOriginal||0, discountPercent:j.discountPercent||8, minChargeApplied:!!j.minChargeApplied,
+      displayOriginal:j.displayOriginal||0, discountPercent:(j.discountPercent!=null?j.discountPercent:8), minChargeApplied:!!j.minChargeApplied,
       distanceKm:j.distanceKm||0, durationMin:j.durationMin||0, routePolyline:j.routePolyline||null };
     if (j.depositPercent > 0) _depositPercent = j.depositPercent;
+    state.shuttleAvailable = !!j.shuttleAvailable;
+    state.shuttlePricePerPerson = j.shuttlePricePerPerson || 0;
+    const canShowShuttle = state.shuttleAvailable && state.clientHasShuttle;
+    if (canShowShuttle && !state.userPickedVeh) {
+      state.veh = 'shuttle';
+    } else if (!canShowShuttle && state.veh === 'shuttle') {
+      state.veh = state.autoVan ? 'van' : 'taxi';
+    }
+    updateVehButtons();
     if (state.persons > 8){
       lastEstimate.blocked = true;
       lastEstimate.reasons = ['van_capacity', ...lastEstimate.reasons.filter(r => r !== 'van_capacity')];
@@ -1268,6 +1311,8 @@ function resetForm(){
   const _ts = document.getElementById('timeScroll');
   if (_ts) _ts.querySelectorAll('.time-opt.sel').forEach(o=>o.classList.remove('sel'));
   state.persons=2; state.luggage=2; state.seats=0; state.veh='taxi'; state.autoVan=false;
+  state.shuttleAvailable=false; state.shuttlePricePerPerson=0; state.userPickedVeh=false;
+  state.clientHasShuttle=false; state.fromClientShuttle=false; state.toClientShuttle=false;
   state.fromLat=state.fromLng=state.toLat=state.toLng=null;
   state.payFull=false;
   document.getElementById('payModeDeposit').classList.add('sel');
@@ -1470,7 +1515,20 @@ function renderSuggestions(id, suggestions){
   const st = acState[id];
   const q = document.getElementById(id).value.trim();
   const clientItems = matchingClients(q).map(c => ({ client:c }));
-  const placeItems  = (suggestions || []).filter(s=>s.placePrediction);
+
+  const norm = (t) => (t || '').toLowerCase().trim();
+  const clientTexts = clientItems.map(ci => [norm(ci.client.name), norm(ci.client.fromName)]);
+  const placeItems = (suggestions || [])
+    .filter(s => s.placePrediction)
+    .filter(s => {
+      const pp = s.placePrediction;
+      const main = norm(pp.mainText ? pp.mainText.text : pp.text.text);
+      if (!main) return true;
+      return !clientTexts.some(([cn, cf]) =>
+        (cn && (main.includes(cn) || cn.includes(main))) ||
+        (cf && (main.includes(cf) || cf.includes(main))));
+    });
+
   st.items = [...clientItems, ...placeItems];
   st.active = -1;
   if (!st.items.length){ closeAc(id); return; }
@@ -1479,24 +1537,28 @@ function renderSuggestions(id, suggestions){
   if (clientItems.length){
     const header = document.createElement('div');
     header.className = 'ac-section-label';
-    header.style.cssText = 'padding:6px 14px;font-size:.72rem;font-weight:700;color:var(--primary-color);text-transform:uppercase;letter-spacing:.4px;';
+    header.style.cssText = 'padding:6px 14px 2px;font-size:.72rem;font-weight:700;color:var(--primary-color);text-transform:uppercase;letter-spacing:.4px;';
     header.innerHTML = '<i class="fas fa-star"></i> Favorite destinations';
     list.appendChild(header);
+    const hint = document.createElement('div');
+    hint.style.cssText = 'padding:0 14px 6px;font-size:.7rem;font-weight:400;color:rgba(255,255,255,.55);text-transform:none;letter-spacing:normal;';
+    hint.textContent = 'Our partners are already in the list — pick them for convenience.';
+    list.appendChild(hint);
   }
   st.items.forEach((s, idx)=>{
     const row = document.createElement('div');
     row.className = 'ac-item';
     if (s.client){
       const c = s.client;
-      const routeBadge = (c.routes && c.routes.length)
-        ? '<span style="margin-left:auto;flex-shrink:0;font-size:.68rem;color:var(--primary-color);background:rgba(212,175,55,.12);padding:2px 8px;border-radius:10px;">'+c.routes.length+' routes</span>'
+      const shuttleBadge = c.hasShuttleBus
+        ? '<span style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;font-size:.68rem;font-weight:700;color:#8a5a00;background:rgba(255,193,7,.18);padding:2px 8px;border-radius:10px;"><i class="fas fa-shuttle-van"></i> Shuttle</span>'
         : '';
       row.innerHTML =
         '<i class="fas fa-star" style="color:var(--primary-color);"></i>' +
         '<div style="display:flex;align-items:center;flex:1;gap:8px;">' +
         '<div><div class="ac-main">'+escapeHtml(c.name)+'</div>' +
         (c.fromName ? '<div class="ac-sub">'+escapeHtml(c.fromName)+'</div>' : '') +
-        '</div>' + routeBadge + '</div>';
+        '</div>' + shuttleBadge + '</div>';
     } else {
       const pp = s.placePrediction;
       const main = pp.mainText ? pp.mainText.text : pp.text.text;
@@ -1517,14 +1579,16 @@ async function pickSuggestion(id, idx){
   const st = acState[id];
   const s = st.items[idx];
   if (!s) return;
+  state.userPickedVeh = false;
 
   // Επιλογή γνωστού πελάτη — γέμισε απευθείας με τη διεύθυνση/συντεταγμένες
   // βάσης του, χωρίς κλήση Places.
   if (s.client){
     const c = s.client;
     document.getElementById(id).value = c.fromName || c.name;
-    if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; }
-    else { state.toLat=c.fromLat; state.toLng=c.fromLng; }
+    if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; }
+    else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; }
+    state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
     scheduleEstimate();
     closeAc(id);
     return;
@@ -1534,8 +1598,9 @@ async function pickSuggestion(id, idx){
   // απευθείας χωρίς fetchFields (δεν υπάρχει place/placePrediction εδώ).
   if (s.plusCode){
     document.getElementById(id).value = s.plusCode.text;
-    if (id==='from'){ state.fromLat=s.plusCode.lat; state.fromLng=s.plusCode.lng; }
-    else { state.toLat=s.plusCode.lat; state.toLng=s.plusCode.lng; }
+    if (id==='from'){ state.fromLat=s.plusCode.lat; state.fromLng=s.plusCode.lng; state.fromClientShuttle=false; }
+    else { state.toLat=s.plusCode.lat; state.toLng=s.plusCode.lng; state.toClientShuttle=false; }
+    state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
     scheduleEstimate();
     closeAc(id);
     return;
@@ -1549,8 +1614,9 @@ async function pickSuggestion(id, idx){
     const lat = place.location ? place.location.lat() : null;
     const lng = place.location ? place.location.lng() : null;
     document.getElementById(id).value = text;
-    if (id==='from'){ state.fromLat=lat; state.fromLng=lng; }
-    else { state.toLat=lat; state.toLng=lng; }
+    if (id==='from'){ state.fromLat=lat; state.fromLng=lng; state.fromClientShuttle=false; }
+    else { state.toLat=lat; state.toLng=lng; state.toClientShuttle=false; }
+    state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
     scheduleEstimate();
   }catch(e){ console.warn('place details error:', e); }
   closeAc(id);
@@ -2073,7 +2139,9 @@ function matchingClients(query){
   const q = (query || '').trim().toLowerCase();
   if (!_frequentClients.length) return [];
   if (!q) return _frequentClients;
-  return _frequentClients.filter(c => (c.name || '').toLowerCase().includes(q));
+  return _frequentClients.filter(c =>
+    (c.name || '').toLowerCase().includes(q) ||
+    (c.fromName || '').toLowerCase().includes(q));
 }
 
 
