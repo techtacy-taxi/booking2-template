@@ -211,6 +211,8 @@ body{
 .veh-shuttle.sel{border-color:var(--primary-color);background:var(--gold-gradient);animation:shuttleGlow 1.1s ease-in-out infinite;}
 .veh-shuttle.sel i,.veh-shuttle.sel .veh-shuttle-title{color:var(--dark-bg);}
 .veh-shuttle.sel .veh-shuttle-sub{color:rgba(15,20,35,.65);}
+.shuttle-slot-btn{flex:1;padding:10px 6px;border-radius:8px;border:1.5px solid var(--field-border);background:var(--dark-bg);color:var(--white);font-size:14px;font-weight:700;cursor:pointer;}
+.shuttle-slot-btn.sel{border-color:var(--primary-color);background:var(--gold-gradient);color:var(--dark-bg);}
 @keyframes shuttleGlow{
   0%,100%{box-shadow:0 0 0 0 rgba(255,193,7,.55);}
   50%{box-shadow:0 0 0 7px rgba(255,193,7,0);}
@@ -564,6 +566,19 @@ body.is-mobile .map-gps{display:flex;}
               </div>
             </div>
           </div>
+          <div id="shuttleSlotArea" style="display:none;background:var(--dark-secondary);border:1.5px solid var(--primary-color);border-radius:10px;padding:10px 12px;margin-top:-6px;">
+            <div style="font-size:12px;color:var(--white);font-weight:700;margin-bottom:8px;">
+              <i class="fas fa-bus" style="color:var(--primary-color);"></i>
+              Shuttle departs at fixed times — pick one:
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button type="button" class="shuttle-slot-btn" id="shuttleSlotBefore" data-time=""></button>
+              <button type="button" class="shuttle-slot-btn" id="shuttleSlotAfter" data-time=""></button>
+            </div>
+            <div style="font-size:10.5px;color:var(--text-muted);margin-top:6px;">
+              If neither works for you, choose Taxi or Van above instead of Shuttle.
+            </div>
+          </div>
 
           <div class="duo">
             <div class="counter">
@@ -606,9 +621,16 @@ body.is-mobile .map-gps{display:flex;}
                 <div class="veh-shuttle-sub" id="vehShuttleSub">Arrival ±15 minutes from the time you set · price per person</div>
               </div>
             </div>
-            <div class="veh-wrap">
+            <div class="veh-wrap" id="vehWrapNormal">
               <div class="veh sel" id="vehTaxi"><i class="fas fa-car"></i><div>Taxi / Sedan</div></div>
               <div class="veh" id="vehVan"><i class="fas fa-shuttle-van"></i><div>Van</div></div>
+            </div>
+            <div class="veh-shuttle" id="vehBusWrap" style="display:none;">
+              <i class="fas fa-bus"></i>
+              <div>
+                <div class="veh-shuttle-title">Bus</div>
+                <div class="veh-shuttle-sub">Over 8 people — required for this many together</div>
+              </div>
             </div>
           </div>
 
@@ -748,7 +770,10 @@ const state = { persons:2, luggage:2, seats:0, veh:'taxi', autoVan:false,
   fromLat:null, fromLng:null, toLat:null, toLng:null,
   dialCode:'+44', country:'GB', payFull:false,
   shuttleAvailable:false, shuttlePricePerPerson:0, userPickedVeh:false,
-  clientHasShuttle:false, fromClientShuttle:false, toClientShuttle:false };
+  clientHasShuttle:false, fromClientShuttle:false, toClientShuttle:false,
+  shuttleSlotOptions:null, selectedShuttleTime:null,
+  noRouteAvailable:false, fullPaymentEnabled:true };
+const BUS_PERSON_THRESHOLD = 9; // people >= 9 -> Bus REQUIRED (Van takes up to 8)
 
 /* ---- Counters ---- */
 function clampStep(t,d){
@@ -759,24 +784,55 @@ function recomputeVehicle(){
   const wasAuto = state.autoVan;
   state.autoVan = (state.persons >= PERSON_VAN_THRESHOLD ||
                    state.luggage >= LUGGAGE_VAN_THRESHOLD);
-  if (state.autoVan){
+  if (state.persons >= BUS_PERSON_THRESHOLD){
+    state.veh = 'bus';
+  } else if (state.veh === 'bus' && !state.userPickedVeh){
+    state.veh = state.autoVan ? 'van' : 'taxi';
+  } else if (state.veh !== 'bus' && state.autoVan){
     if (state.veh !== 'shuttle') state.veh = 'van';
-  } else if (wasAuto && !state.autoVan && state.veh !== 'shuttle'){
+  } else if (state.veh !== 'bus' && wasAuto && !state.autoVan && state.veh !== 'shuttle'){
     state.veh = 'taxi';
   }
 }
 function updateVehButtons(){
+  const isBusForced = state.persons >= BUS_PERSON_THRESHOLD;
+  document.getElementById('vehWrapNormal').style.display = isBusForced ? 'none' : 'flex';
+  document.getElementById('vehBusWrap').style.display = 'flex'; // πάντα ορατό — επιλέγεται αυτόματα μόνο 9+
+  document.getElementById('vehBusWrap').classList.toggle('sel', state.veh === 'bus');
+
   document.getElementById('vehTaxi').classList.toggle('sel', state.veh==='taxi');
   document.getElementById('vehVan').classList.toggle('sel', state.veh==='van');
   const shuttleBox = document.getElementById('vehShuttle');
-  const canShowShuttle = state.shuttleAvailable && state.clientHasShuttle;
+  const canShowShuttle = !isBusForced && state.shuttleAvailable && state.clientHasShuttle;
   shuttleBox.style.display = canShowShuttle ? 'flex' : 'none';
   shuttleBox.classList.toggle('sel', state.veh==='shuttle');
   if (canShowShuttle && state.shuttlePricePerPerson > 0){
     document.getElementById('vehShuttleSub').textContent =
-      'Arrival ±15 minutes from the time you set · '+fmtEUR(state.shuttlePricePerPerson)+' /person';
+      'Fixed schedule · '+fmtEUR(state.shuttlePricePerPerson)+' /person';
   }
+  updateShuttleSlotUI();
 }
+
+function updateShuttleSlotUI(){
+  const area = document.getElementById('shuttleSlotArea');
+  const show = state.veh === 'shuttle' && state.shuttleSlotOptions;
+  area.style.display = show ? 'block' : 'none';
+  if (!show) return;
+  const beforeBtn = document.getElementById('shuttleSlotBefore');
+  const afterBtn  = document.getElementById('shuttleSlotAfter');
+  beforeBtn.textContent = state.shuttleSlotOptions.before;
+  afterBtn.textContent  = state.shuttleSlotOptions.after;
+  beforeBtn.dataset.time = state.shuttleSlotOptions.before;
+  afterBtn.dataset.time  = state.shuttleSlotOptions.after;
+  beforeBtn.classList.toggle('sel', state.selectedShuttleTime === state.shuttleSlotOptions.before);
+  afterBtn.classList.toggle('sel', state.selectedShuttleTime === state.shuttleSlotOptions.after);
+}
+document.getElementById('shuttleSlotBefore').addEventListener('click', function(){
+  state.selectedShuttleTime = this.dataset.time; updateShuttleSlotUI(); renderPrice();
+});
+document.getElementById('shuttleSlotAfter').addEventListener('click', function(){
+  state.selectedShuttleTime = this.dataset.time; updateShuttleSlotUI(); renderPrice();
+});
 function render(){
   for (const t of ['persons','luggage','seats']){
     document.getElementById('v-'+t).textContent = state[t];
@@ -804,14 +860,18 @@ document.querySelectorAll('.stp').forEach(b=>{
 
 document.getElementById('vehTaxi').addEventListener('click', ()=>{
   if (state.autoVan) return;   // κλειδωμένο σε Βαν — βλ. actionArea/waArea
-  state.veh='taxi'; state.userPickedVeh=true; render();
+  state.veh='taxi'; state.userPickedVeh=true; state.selectedShuttleTime=null; render();
 });
 document.getElementById('vehVan').addEventListener('click', ()=>{
-  state.veh='van'; state.userPickedVeh=true; render();
+  state.veh='van'; state.userPickedVeh=true; state.selectedShuttleTime=null; render();
 });
 document.getElementById('vehShuttle').addEventListener('click', ()=>{
   if (!state.shuttleAvailable) return;
   state.veh='shuttle'; state.userPickedVeh=true; render();
+});
+document.getElementById('vehBusWrap').addEventListener('click', ()=>{
+  if (state.persons >= BUS_PERSON_THRESHOLD) return;
+  state.veh='bus'; state.userPickedVeh=true; state.selectedShuttleTime=null; render();
 });
 
 document.getElementById('payModeDeposit').addEventListener('click', ()=>{
@@ -891,18 +951,26 @@ async function fetchEstimate(){
       displayOriginal:j.displayOriginal||0, discountPercent:(j.discountPercent!=null?j.discountPercent:8), minChargeApplied:!!j.minChargeApplied,
       distanceKm:j.distanceKm||0, durationMin:j.durationMin||0, routePolyline:j.routePolyline||null };
     if (j.depositPercent > 0) _depositPercent = j.depositPercent;
+    state.fullPaymentEnabled = j.fullPaymentEnabled !== false;
     state.shuttleAvailable = !!j.shuttleAvailable;
     state.shuttlePricePerPerson = j.shuttlePricePerPerson || 0;
-    const canShowShuttle = state.shuttleAvailable && state.clientHasShuttle;
+    state.noRouteAvailable = !!j.noRouteAvailable;
+    state.shuttleSlotOptions = j.shuttleSlotOptions || null;
+    if (state.shuttleSlotOptions &&
+        state.selectedShuttleTime !== state.shuttleSlotOptions.before &&
+        state.selectedShuttleTime !== state.shuttleSlotOptions.after) {
+      state.selectedShuttleTime = null;
+    }
+    const canShowShuttle = state.persons < BUS_PERSON_THRESHOLD && state.shuttleAvailable && state.clientHasShuttle;
     if (canShowShuttle && !state.userPickedVeh) {
       state.veh = 'shuttle';
     } else if (!canShowShuttle && state.veh === 'shuttle') {
       state.veh = state.autoVan ? 'van' : 'taxi';
     }
     updateVehButtons();
-    if (state.persons > 8){
+    if (state.veh === 'bus' && state.noRouteAvailable) {
       lastEstimate.blocked = true;
-      lastEstimate.reasons = ['van_capacity', ...lastEstimate.reasons.filter(r => r !== 'van_capacity')];
+      lastEstimate.reasons = ['no_bus_route', ...lastEstimate.reasons.filter(r => r !== 'no_bus_route')];
     }
     if (j.distanceKm > 0) _lastRouteSig = routeSig; // κρατάμε το route sig ΜΟΝΟ αν όντως πήραμε δεδομένα
   }catch(e){
@@ -980,7 +1048,8 @@ function reasonLabel(code){
   if (code==='lead_time')      return 'Too soon — needs more advance notice';
   if (code==='large_order')    return 'Large order — needs personal confirmation';
   if (code==='outside_attica') return 'Trip outside Attica — needs personal confirmation';
-  if (code==='van_capacity')   return 'More than 8 people — the Van seats up to 8, you need a Mini Bus. Please contact us';
+  if (code==='van_capacity')   return 'More than 8 people — the Van seats up to 8, you need a Bus. Please contact us';
+  if (code==='no_bus_route')   return 'No available bus route for this trip — please contact us';
   return 'Needs personal confirmation';
 }
 
@@ -994,14 +1063,14 @@ function buildWhatsAppMessage(){
     'Passengers: '       + data.persons,
     'Luggage: '          + data.luggage,
     'Child seats: '      + data.childSeatCount,
-    'Vehicle: ' + (data.vehicleType==='van' ? 'Van' : 'Taxi / Sedan'),
+    'Vehicle: ' + (data.vehicleType==='van' ? 'Van' : data.vehicleType==='bus' ? 'Bus' : data.vehicleType==='shuttle' ? 'Shuttle' : 'Taxi / Sedan'),
     'Name: '     + (data.name  || '-'),
     'Phone: '  + (data.phone || '-'),
     'Estimated price: ' + fmtEUR(lastEstimate.price),
     'Reason: ' + (lastEstimate.reasons.map(reasonLabel).join(' · ') || '-'),
   ];
-  if (data.persons > 8){
-    lines.push('', '⚠️ Needs a MINI BUS (the Van seats up to 8 people) — please contact me for availability/price.');
+  if (data.vehicleType === 'bus' && state.noRouteAvailable){
+    lines.push('', '⚠️ No bus route is configured for this trip — please contact me for availability/price.');
   }
   return lines.join('\n');
 }
@@ -1030,6 +1099,25 @@ function renderPrice(){
     document.getElementById('waLink').href = 'https://wa.me/' + (_tenantWhatsappNumber || 'YOUR_WHATSAPP_NUMBER') + '?text=' + encodeURIComponent(msg);
   }
 
+  // Regulated payment options: a 0% deposit and/or a disabled "full payment"
+  // can leave only ONE option (used directly, no asking) or NONE (booking
+  // proceeds directly with no payment at all — see submit handler below).
+  const noDeposit = _depositPercent <= 0;
+  const noFull = !state.fullPaymentEnabled;
+  state.noPaymentMode = noDeposit && noFull;
+  const payModeRow = document.querySelector('#depositBanner .pay-mode');
+  if (state.noPaymentMode) {
+    payModeRow.style.display = 'none';
+  } else if (noFull) {
+    state.payFull = false;
+    payModeRow.style.display = 'none';
+  } else if (noDeposit) {
+    state.payFull = true;
+    payModeRow.style.display = 'none';
+  } else {
+    payModeRow.style.display = 'flex';
+  }
+
   // Indicative payment amount — tenant-configurable percentage (default
   // 10%), rounded up to the next euro — or the full amount, depending on
   // the customer's choice (state.payFull). The server (createVivaOrder)
@@ -1037,18 +1125,30 @@ function renderPrice(){
   const depositEur = lastEstimate.price > 0 ? Math.ceil(lastEstimate.price * (_depositPercent / 100)) : 0;
   const fullEur    = lastEstimate.price > 0 ? Math.ceil(lastEstimate.price) : 0;
   const payAmt = state.payFull ? fullEur : depositEur;
-  document.getElementById('depositTitle').textContent = state.payFull
-    ? 'Pay the full amount'
-    : 'A ' + _depositPercent + '% deposit is required to book';
-  document.getElementById('depositAmtLine').innerHTML = state.payFull
-    ? 'You will pay <b id="depositAmt">' + fmtEUR(payAmt) + '</b> now via secure payment (Viva) — nothing else for the driver.'
-    : 'You will pay <b id="depositAmt">' + fmtEUR(payAmt) + '</b> now via secure payment (Viva) — the balance goes to the driver.';
+  if (state.noPaymentMode) {
+    document.getElementById('depositTitle').textContent = 'Booking is confirmed without prepayment';
+    document.getElementById('depositAmtLine').innerHTML =
+      'Payment is made directly to the driver — <b>' + fmtEUR(fullEur) + '</b> estimated total.';
+  } else {
+    document.getElementById('depositTitle').textContent = state.payFull
+      ? 'Pay the full amount'
+      : 'A ' + _depositPercent + '% deposit is required to book';
+    document.getElementById('depositAmtLine').innerHTML = state.payFull
+      ? 'You will pay <b id="depositAmt">' + fmtEUR(payAmt) + '</b> now via secure payment (Viva) — nothing else for the driver.'
+      : 'You will pay <b id="depositAmt">' + fmtEUR(payAmt) + '</b> now via secure payment (Viva) — the balance goes to the driver.';
+  }
   const depositModeBtn = document.getElementById('payModeDeposit');
   if (depositModeBtn) {
     depositModeBtn.innerHTML = 'Deposit ' + _depositPercent + '%<span class="pm-sub">balance to the driver</span>';
   }
+  const shuttleNeedsSlot = state.veh === 'shuttle' && state.shuttleSlotOptions && !state.selectedShuttleTime;
+  btn.disabled = shuttleNeedsSlot;
   if (!btn.disabled){
-    setBtn('', '<i class="fas fa-credit-card"></i> ' + (state.payFull ? 'Pay full amount &amp; submit' : 'Pay deposit &amp; submit'));
+    setBtn('', '<i class="fas fa-credit-card"></i> ' + (
+      state.noPaymentMode ? 'Complete booking' :
+      state.payFull ? 'Pay full amount &amp; submit' : 'Pay deposit &amp; submit'));
+  } else if (shuttleNeedsSlot) {
+    setBtn('', '<i class="fas fa-clock"></i> Pick a Shuttle time above');
   }
   renderRouteMap();
 }
@@ -1064,7 +1164,9 @@ function gather(){
     fromLat: state.fromLat, fromLng: state.fromLng,
     toLat:   state.toLat,   toLng:   state.toLng,
     date:    document.getElementById('date').value,   // YYYY-MM-DD
-    time:    document.getElementById('time').value,   // HH:MM
+    time:    (state.veh === 'shuttle' && state.selectedShuttleTime)
+               ? state.selectedShuttleTime
+               : document.getElementById('time').value,   // HH:MM
     persons: state.persons,
     luggage: state.luggage,
     childSeatCount: state.seats,
@@ -1091,6 +1193,10 @@ function isValidEmail(e){
 
 btn.addEventListener('click', async ()=>{
   if (lastEstimate.blocked){ return; }  // ασφάλεια — το UI ήδη δείχνει WhatsApp σε αυτή την περίπτωση
+  if (state.veh === 'shuttle' && state.shuttleSlotOptions && !state.selectedShuttleTime){
+    flash('err','<i class="fas fa-exclamation-circle"></i> Please pick one of the Shuttle times');
+    return;
+  }
   const data = gather();
 
   // Επικύρωση
@@ -1102,9 +1208,24 @@ btn.addEventListener('click', async ()=>{
   if (!data.flight){ flash('err','<i class="fas fa-exclamation-circle"></i> Please enter flight/ship (or 0)'); return; }
 
   btn.disabled = true;
-  setBtn('', '<i class="fas fa-spinner fa-spin"></i> Creating payment…');
+  setBtn('', '<i class="fas fa-spinner fa-spin"></i> ' + (state.noPaymentMode ? 'Sending booking…' : 'Creating payment…'));
 
   try{
+    if (state.noPaymentMode) {
+      // No payment option available (0% deposit + full payment disabled) —
+      // the booking is registered directly, no Viva involved.
+      const res = await fetch(ENDPOINT, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(data)
+      });
+      const j = await res.json().catch(()=>({}));
+      if (!res.ok || !j.ok) throw new Error(j.error || ('HTTP '+res.status));
+      setBtn('ok', '<i class="fas fa-check"></i> Booking confirmed!');
+      setTimeout(() => { window.location.reload(); }, 2200);
+      return;
+    }
+
     // ΔΕΝ καλούμε πια το submitPublicBooking απευθείας. Πρώτα δημιουργούμε
     // Viva payment order για το 10% προκαταβολή· η δουλειά αποθηκεύεται στο
     // saved_jobs ΜΟΝΟ μετά από επιτυχή πληρωμή (webhook vivaWebhook στο index.js).
@@ -1153,7 +1274,7 @@ btn.addEventListener('click', async ()=>{
 
 function flash(kind, html){
   setBtn(kind, html);
-  setTimeout(()=>{ if(!btn.disabled||kind==='err'){ btn.disabled=false; setBtn('', '<i class="fas fa-credit-card"></i> Pay deposit &amp; submit'); } }, 2400);
+  setTimeout(()=>{ if(!btn.disabled||kind==='err'){ btn.disabled=false; renderPrice(); } }, 2400);
 }
 
 /* ---- Pop-up modal (επιτυχία/αποτυχία πληρωμής) ---- */

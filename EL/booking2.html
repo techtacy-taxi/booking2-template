@@ -211,6 +211,8 @@ body{
 .veh-shuttle.sel{border-color:var(--primary-color);background:var(--gold-gradient);animation:shuttleGlow 1.1s ease-in-out infinite;}
 .veh-shuttle.sel i,.veh-shuttle.sel .veh-shuttle-title{color:var(--dark-bg);}
 .veh-shuttle.sel .veh-shuttle-sub{color:rgba(15,20,35,.65);}
+.shuttle-slot-btn{flex:1;padding:10px 6px;border-radius:8px;border:1.5px solid var(--field-border);background:var(--dark-bg);color:var(--white);font-size:14px;font-weight:700;cursor:pointer;}
+.shuttle-slot-btn.sel{border-color:var(--primary-color);background:var(--gold-gradient);color:var(--dark-bg);}
 @keyframes shuttleGlow{
   0%,100%{box-shadow:0 0 0 0 rgba(255,193,7,.55);}
   50%{box-shadow:0 0 0 7px rgba(255,193,7,0);}
@@ -561,6 +563,19 @@ body.is-mobile .map-gps{display:flex;}
               </div>
             </div>
           </div>
+          <div id="shuttleSlotArea" style="display:none;background:var(--dark-secondary);border:1.5px solid var(--primary-color);border-radius:10px;padding:10px 12px;margin-top:-6px;">
+            <div style="font-size:12px;color:var(--white);font-weight:700;margin-bottom:8px;">
+              <i class="fas fa-bus" style="color:var(--primary-color);"></i>
+              Το Shuttle περνάει σε συγκεκριμένες ώρες — διαλέξτε μία:
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button type="button" class="shuttle-slot-btn" id="shuttleSlotBefore" data-time=""></button>
+              <button type="button" class="shuttle-slot-btn" id="shuttleSlotAfter" data-time=""></button>
+            </div>
+            <div style="font-size:10.5px;color:var(--text-muted);margin-top:6px;">
+              Αν καμία δεν σας βολεύει, επιλέξτε Ταξί ή Βαν παραπάνω αντί για Shuttle.
+            </div>
+          </div>
 
           <div class="duo">
             <div class="counter">
@@ -603,9 +618,16 @@ body.is-mobile .map-gps{display:flex;}
                 <div class="veh-shuttle-sub" id="vehShuttleSub">Άφιξη ±15 λεπτά από την ώρα που ορίζετε · τιμή ανά άτομο</div>
               </div>
             </div>
-            <div class="veh-wrap">
+            <div class="veh-wrap" id="vehWrapNormal">
               <div class="veh sel" id="vehTaxi"><i class="fas fa-car"></i><div>Ταξί / Sedan</div></div>
               <div class="veh" id="vehVan"><i class="fas fa-shuttle-van"></i><div>Βαν</div></div>
+            </div>
+            <div class="veh-shuttle" id="vehBusWrap" style="display:none;">
+              <i class="fas fa-bus"></i>
+              <div>
+                <div class="veh-shuttle-title">Λεωφορείο</div>
+                <div class="veh-shuttle-sub">Πάνω από 8 άτομα — απαραίτητο για τόσα άτομα μαζί</div>
+              </div>
             </div>
           </div>
 
@@ -745,7 +767,10 @@ const state = { persons:2, luggage:2, seats:0, veh:'taxi', autoVan:false,
   fromLat:null, fromLng:null, toLat:null, toLng:null,
   dialCode:'+30', country:'GR', payFull:false,
   shuttleAvailable:false, shuttlePricePerPerson:0, userPickedVeh:false,
-  clientHasShuttle:false, fromClientShuttle:false, toClientShuttle:false };
+  clientHasShuttle:false, fromClientShuttle:false, toClientShuttle:false,
+  shuttleSlotOptions:null, selectedShuttleTime:null,
+  noRouteAvailable:false, fullPaymentEnabled:true };
+const BUS_PERSON_THRESHOLD = 9; // άτομα >= 9 -> ΥΠΟΧΡΕΩΤΙΚΟ Λεωφορείο (το Βαν παίρνει μέχρι 8)
 
 /* ---- Counters ---- */
 function clampStep(t,d){
@@ -756,24 +781,57 @@ function recomputeVehicle(){
   const wasAuto = state.autoVan;
   state.autoVan = (state.persons >= PERSON_VAN_THRESHOLD ||
                    state.luggage >= LUGGAGE_VAN_THRESHOLD);
-  if (state.autoVan){
+  if (state.persons >= BUS_PERSON_THRESHOLD){
+    state.veh = 'bus';
+  } else if (state.veh === 'bus' && !state.userPickedVeh){
+    // Έπεσε κάτω από 9 άτομα ΚΑΙ δεν το διάλεξε ο ίδιος — βγαίνει από το
+    // υποχρεωτικό Λεωφορείο. Αν το διάλεξε ο ίδιος χειροκίνητα, το κρατάμε.
+    state.veh = state.autoVan ? 'van' : 'taxi';
+  } else if (state.veh !== 'bus' && state.autoVan){
     if (state.veh !== 'shuttle') state.veh = 'van';
-  } else if (wasAuto && !state.autoVan && state.veh !== 'shuttle'){
+  } else if (state.veh !== 'bus' && wasAuto && !state.autoVan && state.veh !== 'shuttle'){
     state.veh = 'taxi';                // έπεσε κάτω από το όριο -> ξανά Ταξί
   }
 }
 function updateVehButtons(){
+  const isBusForced = state.persons >= BUS_PERSON_THRESHOLD;
+  document.getElementById('vehWrapNormal').style.display = isBusForced ? 'none' : 'flex';
+  document.getElementById('vehBusWrap').style.display = 'flex'; // πάντα ορατό — επιλέγεται αυτόματα μόνο 9+
+  document.getElementById('vehBusWrap').classList.toggle('sel', state.veh === 'bus');
+
   document.getElementById('vehTaxi').classList.toggle('sel', state.veh==='taxi');
   document.getElementById('vehVan').classList.toggle('sel', state.veh==='van');
   const shuttleBox = document.getElementById('vehShuttle');
-  const canShowShuttle = state.shuttleAvailable && state.clientHasShuttle;
+  const canShowShuttle = !isBusForced && state.shuttleAvailable && state.clientHasShuttle;
   shuttleBox.style.display = canShowShuttle ? 'flex' : 'none';
   shuttleBox.classList.toggle('sel', state.veh==='shuttle');
   if (canShowShuttle && state.shuttlePricePerPerson > 0){
     document.getElementById('vehShuttleSub').textContent =
-      'Άφιξη ±15 λεπτά από την ώρα που ορίζετε · '+fmtEUR(state.shuttlePricePerPerson)+' /άτομο';
+      'Σταθερό δρομολόγιο · '+fmtEUR(state.shuttlePricePerPerson)+' /άτομο';
   }
+  updateShuttleSlotUI();
 }
+
+function updateShuttleSlotUI(){
+  const area = document.getElementById('shuttleSlotArea');
+  const show = state.veh === 'shuttle' && state.shuttleSlotOptions;
+  area.style.display = show ? 'block' : 'none';
+  if (!show) return;
+  const beforeBtn = document.getElementById('shuttleSlotBefore');
+  const afterBtn  = document.getElementById('shuttleSlotAfter');
+  beforeBtn.textContent = state.shuttleSlotOptions.before;
+  afterBtn.textContent  = state.shuttleSlotOptions.after;
+  beforeBtn.dataset.time = state.shuttleSlotOptions.before;
+  afterBtn.dataset.time  = state.shuttleSlotOptions.after;
+  beforeBtn.classList.toggle('sel', state.selectedShuttleTime === state.shuttleSlotOptions.before);
+  afterBtn.classList.toggle('sel', state.selectedShuttleTime === state.shuttleSlotOptions.after);
+}
+document.getElementById('shuttleSlotBefore').addEventListener('click', function(){
+  state.selectedShuttleTime = this.dataset.time; updateShuttleSlotUI(); renderPrice();
+});
+document.getElementById('shuttleSlotAfter').addEventListener('click', function(){
+  state.selectedShuttleTime = this.dataset.time; updateShuttleSlotUI(); renderPrice();
+});
 function render(){
   for (const t of ['persons','luggage','seats']){
     document.getElementById('v-'+t).textContent = state[t];
@@ -801,14 +859,18 @@ document.querySelectorAll('.stp').forEach(b=>{
 
 document.getElementById('vehTaxi').addEventListener('click', ()=>{
   if (state.autoVan) return;   // κλειδωμένο σε Βαν — βλ. actionArea/waArea
-  state.veh='taxi'; state.userPickedVeh=true; render();
+  state.veh='taxi'; state.userPickedVeh=true; state.selectedShuttleTime=null; render();
 });
 document.getElementById('vehVan').addEventListener('click', ()=>{
-  state.veh='van'; state.userPickedVeh=true; render();
+  state.veh='van'; state.userPickedVeh=true; state.selectedShuttleTime=null; render();
 });
 document.getElementById('vehShuttle').addEventListener('click', ()=>{
   if (!state.shuttleAvailable) return;
   state.veh='shuttle'; state.userPickedVeh=true; render();
+});
+document.getElementById('vehBusWrap').addEventListener('click', ()=>{
+  if (state.persons >= BUS_PERSON_THRESHOLD) return; // ήδη υποχρεωτικό, δεν χρειάζεται κλικ
+  state.veh='bus'; state.userPickedVeh=true; state.selectedShuttleTime=null; render();
 });
 
 document.getElementById('payModeDeposit').addEventListener('click', ()=>{
@@ -888,18 +950,30 @@ async function fetchEstimate(){
       displayOriginal:j.displayOriginal||0, discountPercent:(j.discountPercent!=null?j.discountPercent:8), minChargeApplied:!!j.minChargeApplied,
       distanceKm:j.distanceKm||0, durationMin:j.durationMin||0, routePolyline:j.routePolyline||null };
     if (j.depositPercent > 0) _depositPercent = j.depositPercent;
+    state.fullPaymentEnabled = j.fullPaymentEnabled !== false;
     state.shuttleAvailable = !!j.shuttleAvailable;
     state.shuttlePricePerPerson = j.shuttlePricePerPerson || 0;
-    const canShowShuttle = state.shuttleAvailable && state.clientHasShuttle;
+    state.noRouteAvailable = !!j.noRouteAvailable;
+    state.shuttleSlotOptions = j.shuttleSlotOptions || null;
+    // Αν άλλαξε η διαδρομή/ώρα και η επιλεγμένη ώρα Shuttle δεν είναι πια
+    // μία από τις 2 προτεινόμενες, ζητάμε ξανά επιλογή.
+    if (state.shuttleSlotOptions &&
+        state.selectedShuttleTime !== state.shuttleSlotOptions.before &&
+        state.selectedShuttleTime !== state.shuttleSlotOptions.after) {
+      state.selectedShuttleTime = null;
+    }
+    const canShowShuttle = state.persons < BUS_PERSON_THRESHOLD && state.shuttleAvailable && state.clientHasShuttle;
     if (canShowShuttle && !state.userPickedVeh) {
       state.veh = 'shuttle';
     } else if (!canShowShuttle && state.veh === 'shuttle') {
       state.veh = state.autoVan ? 'van' : 'taxi';
     }
     updateVehButtons();
-    if (state.persons > 8){
+    // ── Λεωφορείο χωρίς ορισμένη διαδρομή ζώνης → WhatsApp fallback (ίδιο
+    // μηχανισμό με τα υπόλοιπα «χρειάζεται προσωπική επιβεβαίωση»).
+    if (state.veh === 'bus' && state.noRouteAvailable) {
       lastEstimate.blocked = true;
-      lastEstimate.reasons = ['van_capacity', ...lastEstimate.reasons.filter(r => r !== 'van_capacity')];
+      lastEstimate.reasons = ['no_bus_route', ...lastEstimate.reasons.filter(r => r !== 'no_bus_route')];
     }
     if (j.distanceKm > 0) _lastRouteSig = routeSig; // κρατάμε το route sig ΜΟΝΟ αν όντως πήραμε δεδομένα
   }catch(e){
@@ -976,7 +1050,8 @@ function reasonLabel(code){
   if (code==='lead_time')      return 'Πολύ κοντινή ώρα — χρειάζεται μεγαλύτερη προθεσμία';
   if (code==='large_order')    return 'Μεγάλη παραγγελία — χρειάζεται προσωπική επιβεβαίωση';
   if (code==='outside_attica') return 'Διαδρομή εκτός Αττικής — χρειάζεται προσωπική επιβεβαίωση';
-  if (code==='van_capacity')   return 'Πάνω από 8 άτομα — το Βαν παίρνει μέχρι 8, χρειάζεται Mini Bus. Επικοινωνήστε μαζί μας';
+  if (code==='van_capacity')   return 'Πάνω από 8 άτομα — το Βαν παίρνει μέχρι 8, χρειάζεται Λεωφορείο. Επικοινωνήστε μαζί μας';
+  if (code==='no_bus_route')   return 'Δεν υπάρχει διαθέσιμη διαδρομή λεωφορείου για αυτή τη διαδρομή — επικοινωνήστε μαζί μας';
   return 'Χρειάζεται προσωπική επιβεβαίωση';
 }
 
@@ -990,14 +1065,14 @@ function buildWhatsAppMessage(){
     'Άτομα: '            + data.persons,
     'Βαλίτσες: '         + data.luggage,
     'Παιδικά καθίσματα: '+ data.childSeatCount,
-    'Όχημα: ' + (data.vehicleType==='van' ? 'Βαν' : 'Ταξί / Sedan'),
+    'Όχημα: ' + (data.vehicleType==='van' ? 'Βαν' : data.vehicleType==='bus' ? 'Λεωφορείο' : data.vehicleType==='shuttle' ? 'Shuttle' : 'Ταξί / Sedan'),
     'Όνομα: '     + (data.name  || '-'),
     'Τηλέφωνο: '  + (data.phone || '-'),
     'Εκτιμώμενη τιμή: ' + fmtEUR(lastEstimate.price),
     'Λόγος: ' + (lastEstimate.reasons.map(reasonLabel).join(' · ') || '-'),
   ];
-  if (data.persons > 8){
-    lines.push('', '⚠️ Χρειάζεται MINI BUS (το Βαν παίρνει μέχρι 8 άτομα) — παρακαλώ επικοινωνήστε μαζί μου για διαθεσιμότητα/τιμή.');
+  if (data.vehicleType === 'bus' && state.noRouteAvailable){
+    lines.push('', '⚠️ Δεν υπάρχει ορισμένη διαδρομή λεωφορείου — παρακαλώ επικοινωνήστε μαζί μου για διαθεσιμότητα/τιμή.');
   }
   return lines.join('\n');
 }
@@ -1026,25 +1101,58 @@ function renderPrice(){
     document.getElementById('waLink').href = 'https://wa.me/' + (_tenantWhatsappNumber || 'YOUR_WHATSAPP_NUMBER') + '?text=' + encodeURIComponent(msg);
   }
 
-  // Ενδεικτικό ποσό πληρωμής — ρυθμιζόμενο ποσοστό ανά tenant (προεπιλογή
+  // ── Ρυθμιζόμενες επιλογές πληρωμής: 0% προκαταβολή ή/και απενεργοποιημένη
+  // «Πλήρης πληρωμή» μπορεί να αφήσουν μόνο ΜΙΑ επιλογή (χρησιμοποιείται
+  // κατευθείαν, χωρίς να ρωτάει) ή ΚΑΜΙΑ (η κράτηση γίνεται κατευθείαν
+  // χωρίς καμία πληρωμή — βλ. submit handler παρακάτω).
+  const noDeposit = _depositPercent <= 0;
+  const noFull = !state.fullPaymentEnabled;
+  state.noPaymentMode = noDeposit && noFull;
+  const payModeRow = document.querySelector('#depositBanner .pay-mode');
+  if (state.noPaymentMode) {
+    payModeRow.style.display = 'none';
+  } else if (noFull) {
+    state.payFull = false;
+    payModeRow.style.display = 'none';
+  } else if (noDeposit) {
+    state.payFull = true;
+    payModeRow.style.display = 'none';
+  } else {
+    payModeRow.style.display = 'flex';
+  }
+
+  // ── Ενδεικτικό ποσό πληρωμής — ρυθμιζόμενο ποσοστό ανά tenant (προεπιλογή
   // 10%), στρογγυλοποίηση πάνω στο επόμενο ευρώ — ή ολόκληρο το ποσό,
   // ανάλογα με την επιλογή του πελάτη (state.payFull). Ο server
   // (createVivaOrder) ξαναϋπολογίζει το επίσημο ποσό ούτως ή άλλως.
   const depositEur = lastEstimate.price > 0 ? Math.ceil(lastEstimate.price * (_depositPercent / 100)) : 0;
   const fullEur    = lastEstimate.price > 0 ? Math.ceil(lastEstimate.price) : 0;
   const payAmt = state.payFull ? fullEur : depositEur;
-  document.getElementById('depositTitle').textContent = state.payFull
-    ? 'Πληρωμή ολόκληρου ποσού'
-    : 'Για την κράτηση απαιτείται προκαταβολή ' + _depositPercent + '%';
-  document.getElementById('depositAmtLine').innerHTML = state.payFull
-    ? 'Θα πληρώσετε τώρα <b id="depositAmt">' + fmtEUR(payAmt) + '</b> μέσω ασφαλούς πληρωμής (Viva) — τίποτα άλλο στον οδηγό.'
-    : 'Θα πληρώσετε τώρα <b id="depositAmt">' + fmtEUR(payAmt) + '</b> μέσω ασφαλούς πληρωμής (Viva) — το υπόλοιπο στον οδηγό.';
+  if (state.noPaymentMode) {
+    document.getElementById('depositTitle').textContent = 'Η κράτηση γίνεται χωρίς προπληρωμή';
+    document.getElementById('depositAmtLine').innerHTML =
+      'Η πληρωμή γίνεται απευθείας στον οδηγό — <b>' + fmtEUR(fullEur) + '</b> εκτιμώμενο σύνολο.';
+  } else {
+    document.getElementById('depositTitle').textContent = state.payFull
+      ? 'Πληρωμή ολόκληρου ποσού'
+      : 'Για την κράτηση απαιτείται προκαταβολή ' + _depositPercent + '%';
+    document.getElementById('depositAmtLine').innerHTML = state.payFull
+      ? 'Θα πληρώσετε τώρα <b id="depositAmt">' + fmtEUR(payAmt) + '</b> μέσω ασφαλούς πληρωμής (Viva) — τίποτα άλλο στον οδηγό.'
+      : 'Θα πληρώσετε τώρα <b id="depositAmt">' + fmtEUR(payAmt) + '</b> μέσω ασφαλούς πληρωμής (Viva) — το υπόλοιπο στον οδηγό.';
+  }
   const depositModeBtn = document.getElementById('payModeDeposit');
   if (depositModeBtn) {
     depositModeBtn.innerHTML = 'Προκαταβολή ' + _depositPercent + '%<span class="pm-sub">το υπόλοιπο στον οδηγό</span>';
   }
+  // ── Υποχρεωτική επιλογή ώρας Shuttle πριν προχωρήσει η κράτηση.
+  const shuttleNeedsSlot = state.veh === 'shuttle' && state.shuttleSlotOptions && !state.selectedShuttleTime;
+  btn.disabled = shuttleNeedsSlot;
   if (!btn.disabled){
-    setBtn('', '<i class="fas fa-credit-card"></i> ' + (state.payFull ? 'Πληρωμή ολόκληρου ποσού &amp; αποστολή' : 'Πληρωμή προκαταβολής &amp; αποστολή'));
+    setBtn('', '<i class="fas fa-credit-card"></i> ' + (
+      state.noPaymentMode ? 'Ολοκλήρωση κράτησης' :
+      state.payFull ? 'Πληρωμή ολόκληρου ποσού &amp; αποστολή' : 'Πληρωμή προκαταβολής &amp; αποστολή'));
+  } else if (shuttleNeedsSlot) {
+    setBtn('', '<i class="fas fa-clock"></i> Διαλέξτε ώρα Shuttle παραπάνω');
   }
   renderRouteMap();
 }
@@ -1060,7 +1168,9 @@ function gather(){
     fromLat: state.fromLat, fromLng: state.fromLng,
     toLat:   state.toLat,   toLng:   state.toLng,
     date:    document.getElementById('date').value,   // YYYY-MM-DD
-    time:    document.getElementById('time').value,   // HH:MM
+    time:    (state.veh === 'shuttle' && state.selectedShuttleTime)
+               ? state.selectedShuttleTime
+               : document.getElementById('time').value,   // HH:MM
     persons: state.persons,
     luggage: state.luggage,
     childSeatCount: state.seats,
@@ -1087,6 +1197,10 @@ function isValidEmail(e){
 
 btn.addEventListener('click', async ()=>{
   if (lastEstimate.blocked){ return; }  // ασφάλεια — το UI ήδη δείχνει WhatsApp σε αυτή την περίπτωση
+  if (state.veh === 'shuttle' && state.shuttleSlotOptions && !state.selectedShuttleTime){
+    flash('err','<i class="fas fa-exclamation-circle"></i> Διαλέξτε μία από τις ώρες Shuttle');
+    return;
+  }
   const data = gather();
 
   // Επικύρωση
@@ -1098,9 +1212,24 @@ btn.addEventListener('click', async ()=>{
   if (!data.flight){ flash('err','<i class="fas fa-exclamation-circle"></i> Συμπληρώστε πτήση/πλοίο (ή 0)'); return; }
 
   btn.disabled = true;
-  setBtn('', '<i class="fas fa-spinner fa-spin"></i> Δημιουργία πληρωμής…');
+  setBtn('', '<i class="fas fa-spinner fa-spin"></i> ' + (state.noPaymentMode ? 'Αποστολή κράτησης…' : 'Δημιουργία πληρωμής…'));
 
   try{
+    if (state.noPaymentMode) {
+      // ── Καμία πληρωμή διαθέσιμη (0% προκαταβολή + απενεργοποιημένη πλήρης
+      // πληρωμή) — η κράτηση καταχωρείται ΚΑΤΕΥΘΕΙΑΝ, χωρίς Viva.
+      const res = await fetch(ENDPOINT, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(data)
+      });
+      const j = await res.json().catch(()=>({}));
+      if (!res.ok || !j.ok) throw new Error(j.error || ('HTTP '+res.status));
+      setBtn('ok', '<i class="fas fa-check"></i> Η κράτηση καταχωρήθηκε!');
+      setTimeout(() => { window.location.reload(); }, 2200);
+      return;
+    }
+
     // ΔΕΝ καλούμε πια το submitPublicBooking απευθείας. Πρώτα δημιουργούμε
     // Viva payment order για το 10% προκαταβολή· η δουλειά αποθηκεύεται στο
     // saved_jobs ΜΟΝΟ μετά από επιτυχή πληρωμή (webhook vivaWebhook στο index.js).
@@ -1149,7 +1278,7 @@ btn.addEventListener('click', async ()=>{
 
 function flash(kind, html){
   setBtn(kind, html);
-  setTimeout(()=>{ if(!btn.disabled||kind==='err'){ btn.disabled=false; setBtn('', '<i class="fas fa-credit-card"></i> Πληρωμή προκαταβολής &amp; αποστολή'); } }, 2400);
+  setTimeout(()=>{ if(!btn.disabled||kind==='err'){ btn.disabled=false; renderPrice(); } }, 2400);
 }
 
 /* ---- Pop-up modal (επιτυχία/αποτυχία πληρωμής) ---- */
