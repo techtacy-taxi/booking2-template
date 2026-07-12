@@ -422,6 +422,7 @@ body.is-mobile .map-gps{display:flex;}
 
 /* ---------- Custom autocomplete dropdown (Places API New) ---------- */
 .ac-wrap{position:relative;}
+.clients-only-select{width:100%;padding:12px 14px;border-radius:var(--radius-sm);border:1px solid var(--field-border);background:var(--field-bg);color:var(--white);font-size:.95rem;}
 .ac-list{
   position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:50;
   background:var(--dark-secondary);border:1px solid var(--field-border);
@@ -534,6 +535,14 @@ body.is-mobile .map-gps{display:flex;}
                 <div class="ac-list" id="ac-to"></div>
               </div>
             </div>
+          </div>
+
+          <div id="routeSuggestArea" style="display:none;background:var(--dark-secondary);border:1px solid var(--field-border);border-radius:10px;padding:10px 12px;margin-top:-6px;">
+            <div style="font-size:11.5px;color:var(--white);font-weight:700;margin-bottom:8px;">
+              <i class="fas fa-star" style="color:var(--primary-color);"></i>
+              Αυτός ο συνεργάτης έχει καθορισμένες τιμές — διαλέξτε προορισμό:
+            </div>
+            <div id="routeSuggestChips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
           </div>
 
           <div id="routeMapWrap" style="display:none;">
@@ -658,6 +667,20 @@ body.is-mobile .map-gps{display:flex;}
             </div>
           </div>
           <div class="fld"><label><i class="fas fa-comment-dots li"></i>Σχόλια <span class="opt">(προαιρετικό)</span></label><textarea id="note" placeholder="Επιπλέον πληροφορίες για τον οδηγό…"></textarea></div>
+          <div id="invoiceOptionWrap" style="display:none;">
+            <div class="fld">
+              <label style="margin-bottom:7px;">Παραστατικό</label>
+              <div class="veh-wrap">
+                <div class="veh sel" id="docReceipt"><i class="fas fa-receipt"></i><div>Απόδειξη</div></div>
+                <div class="veh" id="docInvoice"><i class="fas fa-file-invoice"></i><div>Τιμολόγιο</div></div>
+              </div>
+            </div>
+            <div id="invoiceFields" style="display:none;">
+              <div class="fld"><label>Επωνυμία επιχείρησης</label><input type="text" id="invoiceCompanyName" placeholder="π.χ. ΕΤΑΙΡΕΙΑ Α.Ε."></div>
+              <div class="fld"><label>ΑΦΜ *</label><input type="text" id="invoiceAfm" inputmode="numeric" placeholder="π.χ. 123456789"></div>
+              <div class="fld"><label>Διεύθυνση</label><input type="text" id="invoiceAddress" placeholder="Οδός, αριθμός, πόλη, ΤΚ"></div>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -769,7 +792,7 @@ const state = { persons:2, luggage:2, seats:0, veh:'taxi', autoVan:false,
   shuttleAvailable:false, shuttlePricePerPerson:0, userPickedVeh:false,
   clientHasShuttle:false, fromClientShuttle:false, toClientShuttle:false,
   shuttleSlotOptions:null, selectedShuttleTime:null,
-  noRouteAvailable:false, fullPaymentEnabled:true };
+  noRouteAvailable:false, fullPaymentEnabled:true, wantsInvoice:false };
 const BUS_PERSON_THRESHOLD = 9; // άτομα >= 9 -> ΥΠΟΧΡΕΩΤΙΚΟ Λεωφορείο (το Βαν παίρνει μέχρι 8)
 
 /* ---- Counters ---- */
@@ -873,6 +896,19 @@ document.getElementById('vehBusWrap').addEventListener('click', ()=>{
   state.veh='bus'; state.userPickedVeh=true; state.selectedShuttleTime=null; render();
 });
 
+document.getElementById('docReceipt').addEventListener('click', ()=>{
+  state.wantsInvoice = false;
+  document.getElementById('docReceipt').classList.add('sel');
+  document.getElementById('docInvoice').classList.remove('sel');
+  document.getElementById('invoiceFields').style.display = 'none';
+});
+document.getElementById('docInvoice').addEventListener('click', ()=>{
+  state.wantsInvoice = true;
+  document.getElementById('docInvoice').classList.add('sel');
+  document.getElementById('docReceipt').classList.remove('sel');
+  document.getElementById('invoiceFields').style.display = 'block';
+});
+
 document.getElementById('payModeDeposit').addEventListener('click', ()=>{
   state.payFull = false;
   document.getElementById('payModeDeposit').classList.add('sel');
@@ -935,6 +971,7 @@ async function fetchEstimate(){
         vehicleType:data.vehicleType, lang:data.lang, dialCode:state.dialCode,
         date:data.date, time:data.time,
         needMap: nameFilled,
+        clientsOnlyMode: !_placesEnabled,
         ...(sameRoute ? {
           cachedDistanceKm:   lastEstimate.distanceKm,
           cachedDurationMin:  lastEstimate.durationMin,
@@ -954,6 +991,25 @@ async function fetchEstimate(){
     state.shuttleAvailable = !!j.shuttleAvailable;
     state.shuttlePricePerPerson = j.shuttlePricePerPerson || 0;
     state.noRouteAvailable = !!j.noRouteAvailable;
+    // ── Η επιλογή «Θέλω Τιμολόγιο» εμφανίζεται ΜΟΝΟ αν ο tenant έχει ρητά
+    // ενεργοποιήσει την αυτόματη έκδοση παραστατικού ΚΑΙ διάλεξε πάροχο —
+    // ΚΑΙ μόνο αν υπάρχει έστω μία διαθέσιμη επιλογή πληρωμής (η έκδοση
+    // παραστατικού γίνεται μόνο μετά από πραγματική online πληρωμή Viva —
+    // χωρίς καμία επιλογή πληρωμής, δεν θα εκδιδόταν ποτέ τίποτα ούτως ή
+    // άλλως, οπότε δεν έχει νόημα να φαίνεται η επιλογή).
+    const noPaymentAtAll = _depositPercent <= 0 && !state.fullPaymentEnabled;
+    const invoiceOptionWrap = document.getElementById('invoiceOptionWrap');
+    if (invoiceOptionWrap) {
+      const showInvoiceOpt = !noPaymentAtAll && j.invoiceEnabled === true &&
+        (j.invoiceProvider === 'mydata' || j.invoiceProvider === 'epsilon');
+      invoiceOptionWrap.style.display = showInvoiceOpt ? 'block' : 'none';
+      if (!showInvoiceOpt && state.wantsInvoice) {
+        state.wantsInvoice = false;
+        document.getElementById('docReceipt').classList.add('sel');
+        document.getElementById('docInvoice').classList.remove('sel');
+        document.getElementById('invoiceFields').style.display = 'none';
+      }
+    }
     state.shuttleSlotOptions = j.shuttleSlotOptions || null;
     // Αν άλλαξε η διαδρομή/ώρα και η επιλεγμένη ώρα Shuttle δεν είναι πια
     // μία από τις 2 προτεινόμενες, ζητάμε ξανά επιλογή.
@@ -969,11 +1025,12 @@ async function fetchEstimate(){
       state.veh = state.autoVan ? 'van' : 'taxi';
     }
     updateVehButtons();
-    // ── Λεωφορείο χωρίς ορισμένη διαδρομή ζώνης → WhatsApp fallback (ίδιο
-    // μηχανισμό με τα υπόλοιπα «χρειάζεται προσωπική επιβεβαίωση»).
-    if (state.veh === 'bus' && state.noRouteAvailable) {
+    // ── Λεωφορείο χωρίς ορισμένη διαδρομή ζώνης, Ή λειτουργία «μόνο πελάτες»
+    // (Places off) χωρίς ταίριασμα διαδρομής πελάτη → WhatsApp fallback.
+    if ((state.veh === 'bus' || !_placesEnabled) && state.noRouteAvailable) {
+      const rc = state.veh === 'bus' ? 'no_bus_route' : 'no_client_route';
       lastEstimate.blocked = true;
-      lastEstimate.reasons = ['no_bus_route', ...lastEstimate.reasons.filter(r => r !== 'no_bus_route')];
+      lastEstimate.reasons = [rc, ...lastEstimate.reasons.filter(r => r !== rc)];
     }
     if (j.distanceKm > 0) _lastRouteSig = routeSig; // κρατάμε το route sig ΜΟΝΟ αν όντως πήραμε δεδομένα
   }catch(e){
@@ -1045,6 +1102,18 @@ function renderRouteMap(){
   _routeMap.fitBounds(bounds, 28);
 }
 
+// ── Επικύρωση ΑΦΜ (επίσημος αλγόριθμος ψηφίου ελέγχου) — 9 ψηφία, το
+// τελευταίο είναι ψηφίο ελέγχου βάσει βαρών δυνάμεων του 2.
+function isValidGreekAfm(afm){
+  if (!/^\d{9}$/.test(afm)) return false;
+  let sum = 0;
+  for (let i = 0; i < 8; i++){
+    sum += parseInt(afm[i], 10) * Math.pow(2, 8 - i);
+  }
+  const check = (sum % 11) % 10;
+  return check === parseInt(afm[8], 10);
+}
+
 function reasonLabel(code){
   if (code==='blackout')       return 'Εκτός ωραρίου φόρμας για αυτή την ώρα';
   if (code==='lead_time')      return 'Πολύ κοντινή ώρα — χρειάζεται μεγαλύτερη προθεσμία';
@@ -1052,6 +1121,7 @@ function reasonLabel(code){
   if (code==='outside_attica') return 'Διαδρομή εκτός Αττικής — χρειάζεται προσωπική επιβεβαίωση';
   if (code==='van_capacity')   return 'Πάνω από 8 άτομα — το Βαν παίρνει μέχρι 8, χρειάζεται Λεωφορείο. Επικοινωνήστε μαζί μας';
   if (code==='no_bus_route')   return 'Δεν υπάρχει διαθέσιμη διαδρομή λεωφορείου για αυτή τη διαδρομή — επικοινωνήστε μαζί μας';
+  if (code==='no_client_route') return 'Δεν βρέθηκε ορισμένη διαδρομή για αυτούς τους πελάτες — επικοινωνήστε μαζί μας';
   return 'Χρειάζεται προσωπική επιβεβαίωση';
 }
 
@@ -1160,11 +1230,20 @@ function renderPrice(){
 /* ---- Submit ---- */
 const btn = document.getElementById('sendBtn');
 
+function fieldText(id){
+  if (!_placesEnabled){
+    const sel = document.getElementById(id+'ClientSelect');
+    if (sel && sel.value !== '') return _frequentClients[Number(sel.value)].name;
+    return '';
+  }
+  return document.getElementById(id).value.trim();
+}
+
 function gather(){
   const rawPhone = document.getElementById('phone').value.trim();
   return {
-    from:    document.getElementById('from').value.trim(),
-    to:      document.getElementById('to').value.trim(),
+    from:    fieldText('from'),
+    to:      fieldText('to'),
     fromLat: state.fromLat, fromLng: state.fromLng,
     toLat:   state.toLat,   toLng:   state.toLng,
     date:    document.getElementById('date').value,   // YYYY-MM-DD
@@ -1183,6 +1262,10 @@ function gather(){
     lang:    document.documentElement.lang || 'el',
     payFull: !!state.payFull,
     tenantId: EFORM_ID,
+    wantsInvoice: state.wantsInvoice,
+    invoiceCompanyName: document.getElementById('invoiceCompanyName').value.trim(),
+    invoiceAfm: document.getElementById('invoiceAfm').value.trim(),
+    invoiceAddress: document.getElementById('invoiceAddress').value.trim(),
   };
 }
 
@@ -1205,6 +1288,14 @@ btn.addEventListener('click', async ()=>{
 
   // Επικύρωση
   if (!data.from || !data.to){ flash('err','<i class="fas fa-exclamation-circle"></i> Συμπληρώστε Από και Προς'); return; }
+  if (data.wantsInvoice && !data.invoiceAfm){
+    flash('err','<i class="fas fa-exclamation-circle"></i> Συμπληρώστε ΑΦΜ για το τιμολόγιο');
+    return;
+  }
+  if (data.wantsInvoice && data.invoiceAfm && !isValidGreekAfm(data.invoiceAfm)){
+    flash('err','<i class="fas fa-exclamation-circle"></i> Το ΑΦΜ δεν είναι έγκυρο — ελέγξτε το');
+    return;
+  }
   if (!data.name){ flash('err','<i class="fas fa-exclamation-circle"></i> Συμπληρώστε το ονοματεπώνυμο'); return; }
   if (!document.getElementById('phone').value.trim()){ flash('err','<i class="fas fa-exclamation-circle"></i> Συμπληρώστε τηλέφωνο'); return; }
   if (!data.date || !data.time){ flash('err','<i class="fas fa-exclamation-circle"></i> Επιλέξτε ημερομηνία και ώρα'); return; }
@@ -1707,11 +1798,43 @@ function renderSuggestions(id, suggestions){
   list.classList.add('open');
 }
 
+// ── Προτεινόμενες διαδρομές — όταν διαλέγεις πελάτη με αποθηκευμένες
+// διαδρομές (π.χ. Airstay → Αεροδρόμιο 30€), δείχνουμε τις διαδρομές του
+// σαν γρήγορες επιλογές για ΤΟ ΑΛΛΟ πεδίο (αν διάλεξες «Από», προτείνει
+// «Προς» και αντίστροφα).
+function showRouteSuggestions(pickedId, client){
+  const area = document.getElementById('routeSuggestArea');
+  const chipsBox = document.getElementById('routeSuggestChips');
+  if (!client.routes || !client.routes.length){
+    area.style.display = 'none';
+    return;
+  }
+  const otherId = pickedId === 'from' ? 'to' : 'from';
+  chipsBox.innerHTML = '';
+  client.routes.forEach(r => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.textContent = r.toName;
+    chip.style.cssText = 'padding:6px 12px;border-radius:16px;border:1px solid var(--primary-color);'+
+      'background:transparent;color:var(--primary-color);font-size:12.5px;cursor:pointer;';
+    chip.addEventListener('click', ()=>{
+      document.getElementById(otherId).value = r.toName;
+      if (otherId === 'from'){ state.fromLat = r.toLat; state.fromLng = r.toLng; }
+      else { state.toLat = r.toLat; state.toLng = r.toLng; }
+      area.style.display = 'none';
+      scheduleEstimate();
+    });
+    chipsBox.appendChild(chip);
+  });
+  area.style.display = 'block';
+}
+
 async function pickSuggestion(id, idx){
   const st = acState[id];
   const s = st.items[idx];
   if (!s) return;
   state.userPickedVeh = false;
+  document.getElementById('routeSuggestArea').style.display = 'none';
 
   // Επιλογή γνωστού πελάτη — γέμισε απευθείας με τη διεύθυνση/συντεταγμένες
   // βάσης του, χωρίς κλήση Places.
@@ -1721,6 +1844,7 @@ async function pickSuggestion(id, idx){
     if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; }
     else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; }
     state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
+    showRouteSuggestions(id, c);
     scheduleEstimate();
     closeAc(id);
     return;
@@ -1742,7 +1866,7 @@ async function pickSuggestion(id, idx){
   try{
     const place = s.placePrediction.toPlace();
     await place.fetchFields({ fields:['formattedAddress','location','displayName'] });
-    const text = place.formattedAddress || (place.displayName || '');
+    const text = place.displayName || place.formattedAddress || '';
     const lat = place.location ? place.location.lat() : null;
     const lng = place.location ? place.location.lng() : null;
     document.getElementById(id).value = text;
@@ -2254,6 +2378,7 @@ document.getElementById('name').addEventListener('input', ()=>{
 /* ---- Συχνές διαδρομές (γνωστοί πελάτες) — ΕΝΣΩΜΑΤΩΜΕΝΟΙ μέσα στη λίστα
    αυτόματης συμπλήρωσης, ίδιο με το Android app. ---- */
 let _frequentClients = [];
+let _clientsLoaded = false;
 async function loadFrequentClients(){
   try{
     const res = await fetch(CLIENTS_ENDPOINT, {
@@ -2262,9 +2387,63 @@ async function loadFrequentClients(){
       body: JSON.stringify({ tenantId: EFORM_ID }),
     });
     const j = await res.json();
-    if (!j.ok || !Array.isArray(j.clients)) return;
-    _frequentClients = j.clients;
+    if (j.ok && Array.isArray(j.clients)) _frequentClients = j.clients;
   }catch(e){ console.error('loadFrequentClients error:', e); }
+  finally {
+    _clientsLoaded = true;
+    maybeActivateClientsOnlyMode();
+  }
+}
+
+// ── Places απενεργοποιημένο για τον tenant (_placesEnabled, φορτώνεται από
+// το loadTenantBusinessInfo) — μετατρέπουμε τα πεδία «Από»/«Προς» από
+// ελεύθερο κείμενο σε dropdown ΜΟΝΟ με πελάτες. Ενεργοποιείται μόλις είναι
+// έτοιμα ΚΑΙ οι δύο ανεξάρτητες φορτώσεις (πελάτες + ρυθμίσεις tenant),
+// όποια κι αν τελειώσει τελευταία.
+let _placesEnabledLoaded = false;
+let _clientsOnlyActivated = false;
+function maybeActivateClientsOnlyMode(){
+  if (_clientsOnlyActivated) return;
+  if (!_clientsLoaded || !_placesEnabledLoaded) return; // περίμενε και τα δύο
+  if (_placesEnabled) return;                            // Places ενεργό — καμία αλλαγή
+  _clientsOnlyActivated = true;
+  activateClientsOnlyMode();
+}
+function activateClientsOnlyMode(){
+  ['from', 'to'].forEach(id => {
+    const input = document.getElementById(id);
+    const wrap = input.closest('.ac-wrap');
+    if (!wrap) return;
+    const select = document.createElement('select');
+    select.id = id + 'ClientSelect';
+    select.className = 'clients-only-select';
+    select.innerHTML = '<option value="">— Διαλέξτε πελάτη —</option>' +
+      _frequentClients.map((c, i) =>
+        '<option value="'+i+'">'+escapeHtml(c.name)+(c.fromName ? ' — '+escapeHtml(c.fromName) : '')+'</option>'
+      ).join('');
+    select.addEventListener('change', function(){
+      state.userPickedVeh = false;
+      document.getElementById('routeSuggestArea').style.display = 'none';
+      if (this.value === ''){
+        if (id==='from'){ state.fromLat=null; state.fromLng=null; }
+        else { state.toLat=null; state.toLng=null; }
+        return;
+      }
+      const c = _frequentClients[Number(this.value)];
+      if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; }
+      else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; }
+      state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
+      showRouteSuggestions(id, c);
+      scheduleEstimate();
+    });
+    // Κρύψε το κανονικό πεδίο κειμένου + autocomplete, δείξε το dropdown.
+    input.style.display = 'none';
+    const gpsBtn = wrap.parentElement.querySelector('.gps-btn[data-target="'+id+'"]');
+    const mapBtn = wrap.parentElement.querySelector('.map-btn[data-target="'+id+'"]');
+    if (gpsBtn) gpsBtn.style.display = 'none';
+    if (mapBtn) mapBtn.style.display = 'none';
+    wrap.insertBefore(select, wrap.firstChild);
+  });
 }
 
 function matchingClients(query){
@@ -2308,10 +2487,14 @@ async function loadTenantBusinessInfo(){
     if (j.whatsappNumber){ _tenantWhatsappNumber = j.whatsappNumber.replace(/[^0-9]/g,''); }
     _mapEnabled = j.mapEnabled !== false;
     _placesEnabled = j.placesEnabled !== false;
+    _placesEnabledLoaded = true;
+    maybeActivateClientsOnlyMode();
     if (!_mapEnabled) renderRouteMap();
     if (j.mapsApiKey) _tenantMapsApiKey = j.mapsApiKey;
   }catch(e){
     console.error('loadTenantBusinessInfo error:', e);
+    _placesEnabledLoaded = true;
+    maybeActivateClientsOnlyMode();
   } finally {
     loadGoogleMapsScript(_tenantMapsApiKey);
   }

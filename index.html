@@ -422,6 +422,7 @@ body.is-mobile .map-gps{display:flex;}
 
 /* ---------- Custom autocomplete dropdown (Places API New) ---------- */
 .ac-wrap{position:relative;}
+.clients-only-select{width:100%;padding:12px 14px;border-radius:var(--radius-sm);border:1px solid var(--field-border);background:var(--field-bg);color:var(--white);font-size:.95rem;}
 .ac-list{
   position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:50;
   background:var(--dark-secondary);border:1px solid var(--field-border);
@@ -537,6 +538,14 @@ body.is-mobile .map-gps{display:flex;}
                 <div class="ac-list" id="ac-to"></div>
               </div>
             </div>
+          </div>
+
+          <div id="routeSuggestArea" style="display:none;background:var(--dark-secondary);border:1px solid var(--field-border);border-radius:10px;padding:10px 12px;margin-top:-6px;">
+            <div style="font-size:11.5px;color:var(--white);font-weight:700;margin-bottom:8px;">
+              <i class="fas fa-star" style="color:var(--primary-color);"></i>
+              This partner has fixed prices — pick a destination:
+            </div>
+            <div id="routeSuggestChips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
           </div>
 
           <div id="routeMapWrap" style="display:none;">
@@ -661,6 +670,20 @@ body.is-mobile .map-gps{display:flex;}
             </div>
           </div>
           <div class="fld"><label><i class="fas fa-comment-dots li"></i>Notes <span class="opt">(optional)</span></label><textarea id="note" placeholder="Extra info for the driver…"></textarea></div>
+          <div id="invoiceOptionWrap" style="display:none;">
+            <div class="fld">
+              <label style="margin-bottom:7px;">Document type</label>
+              <div class="veh-wrap">
+                <div class="veh sel" id="docReceipt"><i class="fas fa-receipt"></i><div>Receipt</div></div>
+                <div class="veh" id="docInvoice"><i class="fas fa-file-invoice"></i><div>Invoice</div></div>
+              </div>
+            </div>
+            <div id="invoiceFields" style="display:none;">
+              <div class="fld"><label>Company name</label><input type="text" id="invoiceCompanyName" placeholder="e.g. COMPANY LTD"></div>
+              <div class="fld"><label>VAT Number (ΑΦΜ) *</label><input type="text" id="invoiceAfm" inputmode="numeric" placeholder="e.g. 123456789"></div>
+              <div class="fld"><label>Address</label><input type="text" id="invoiceAddress" placeholder="Street, number, city, postal code"></div>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -772,7 +795,7 @@ const state = { persons:2, luggage:2, seats:0, veh:'taxi', autoVan:false,
   shuttleAvailable:false, shuttlePricePerPerson:0, userPickedVeh:false,
   clientHasShuttle:false, fromClientShuttle:false, toClientShuttle:false,
   shuttleSlotOptions:null, selectedShuttleTime:null,
-  noRouteAvailable:false, fullPaymentEnabled:true };
+  noRouteAvailable:false, fullPaymentEnabled:true, wantsInvoice:false };
 const BUS_PERSON_THRESHOLD = 9; // people >= 9 -> Bus REQUIRED (Van takes up to 8)
 
 /* ---- Counters ---- */
@@ -874,6 +897,19 @@ document.getElementById('vehBusWrap').addEventListener('click', ()=>{
   state.veh='bus'; state.userPickedVeh=true; state.selectedShuttleTime=null; render();
 });
 
+document.getElementById('docReceipt').addEventListener('click', ()=>{
+  state.wantsInvoice = false;
+  document.getElementById('docReceipt').classList.add('sel');
+  document.getElementById('docInvoice').classList.remove('sel');
+  document.getElementById('invoiceFields').style.display = 'none';
+});
+document.getElementById('docInvoice').addEventListener('click', ()=>{
+  state.wantsInvoice = true;
+  document.getElementById('docInvoice').classList.add('sel');
+  document.getElementById('docReceipt').classList.remove('sel');
+  document.getElementById('invoiceFields').style.display = 'block';
+});
+
 document.getElementById('payModeDeposit').addEventListener('click', ()=>{
   state.payFull = false;
   document.getElementById('payModeDeposit').classList.add('sel');
@@ -936,6 +972,7 @@ async function fetchEstimate(){
         vehicleType:data.vehicleType, lang:data.lang, dialCode:state.dialCode,
         date:data.date, time:data.time,
         needMap: nameFilled,
+        clientsOnlyMode: !_placesEnabled,
         ...(sameRoute ? {
           cachedDistanceKm:   lastEstimate.distanceKm,
           cachedDurationMin:  lastEstimate.durationMin,
@@ -955,6 +992,19 @@ async function fetchEstimate(){
     state.shuttleAvailable = !!j.shuttleAvailable;
     state.shuttlePricePerPerson = j.shuttlePricePerPerson || 0;
     state.noRouteAvailable = !!j.noRouteAvailable;
+    const noPaymentAtAll = _depositPercent <= 0 && !state.fullPaymentEnabled;
+    const invoiceOptionWrap = document.getElementById('invoiceOptionWrap');
+    if (invoiceOptionWrap) {
+      const showInvoiceOpt = !noPaymentAtAll && j.invoiceEnabled === true &&
+        (j.invoiceProvider === 'mydata' || j.invoiceProvider === 'epsilon');
+      invoiceOptionWrap.style.display = showInvoiceOpt ? 'block' : 'none';
+      if (!showInvoiceOpt && state.wantsInvoice) {
+        state.wantsInvoice = false;
+        document.getElementById('docReceipt').classList.add('sel');
+        document.getElementById('docInvoice').classList.remove('sel');
+        document.getElementById('invoiceFields').style.display = 'none';
+      }
+    }
     state.shuttleSlotOptions = j.shuttleSlotOptions || null;
     if (state.shuttleSlotOptions &&
         state.selectedShuttleTime !== state.shuttleSlotOptions.before &&
@@ -968,9 +1018,10 @@ async function fetchEstimate(){
       state.veh = state.autoVan ? 'van' : 'taxi';
     }
     updateVehButtons();
-    if (state.veh === 'bus' && state.noRouteAvailable) {
+    if ((state.veh === 'bus' || !_placesEnabled) && state.noRouteAvailable) {
+      const rc = state.veh === 'bus' ? 'no_bus_route' : 'no_client_route';
       lastEstimate.blocked = true;
-      lastEstimate.reasons = ['no_bus_route', ...lastEstimate.reasons.filter(r => r !== 'no_bus_route')];
+      lastEstimate.reasons = [rc, ...lastEstimate.reasons.filter(r => r !== rc)];
     }
     if (j.distanceKm > 0) _lastRouteSig = routeSig; // κρατάμε το route sig ΜΟΝΟ αν όντως πήραμε δεδομένα
   }catch(e){
@@ -1043,6 +1094,16 @@ function renderRouteMap(){
   _routeMap.fitBounds(bounds, 28);
 }
 
+function isValidGreekAfm(afm){
+  if (!/^\d{9}$/.test(afm)) return false;
+  let sum = 0;
+  for (let i = 0; i < 8; i++){
+    sum += parseInt(afm[i], 10) * Math.pow(2, 8 - i);
+  }
+  const check = (sum % 11) % 10;
+  return check === parseInt(afm[8], 10);
+}
+
 function reasonLabel(code){
   if (code==='blackout')       return 'Outside booking hours for this time';
   if (code==='lead_time')      return 'Too soon — needs more advance notice';
@@ -1050,6 +1111,7 @@ function reasonLabel(code){
   if (code==='outside_attica') return 'Trip outside Attica — needs personal confirmation';
   if (code==='van_capacity')   return 'More than 8 people — the Van seats up to 8, you need a Bus. Please contact us';
   if (code==='no_bus_route')   return 'No available bus route for this trip — please contact us';
+  if (code==='no_client_route') return 'No defined route found for these locations — please contact us';
   return 'Needs personal confirmation';
 }
 
@@ -1156,11 +1218,20 @@ function renderPrice(){
 /* ---- Submit ---- */
 const btn = document.getElementById('sendBtn');
 
+function fieldText(id){
+  if (!_placesEnabled){
+    const sel = document.getElementById(id+'ClientSelect');
+    if (sel && sel.value !== '') return _frequentClients[Number(sel.value)].name;
+    return '';
+  }
+  return document.getElementById(id).value.trim();
+}
+
 function gather(){
   const rawPhone = document.getElementById('phone').value.trim();
   return {
-    from:    document.getElementById('from').value.trim(),
-    to:      document.getElementById('to').value.trim(),
+    from:    fieldText('from'),
+    to:      fieldText('to'),
     fromLat: state.fromLat, fromLng: state.fromLng,
     toLat:   state.toLat,   toLng:   state.toLng,
     date:    document.getElementById('date').value,   // YYYY-MM-DD
@@ -1179,6 +1250,10 @@ function gather(){
     lang:    document.documentElement.lang || 'el',
     payFull: !!state.payFull,
     tenantId: EFORM_ID,
+    wantsInvoice: state.wantsInvoice,
+    invoiceCompanyName: document.getElementById('invoiceCompanyName').value.trim(),
+    invoiceAfm: document.getElementById('invoiceAfm').value.trim(),
+    invoiceAddress: document.getElementById('invoiceAddress').value.trim(),
   };
 }
 
@@ -1201,6 +1276,14 @@ btn.addEventListener('click', async ()=>{
 
   // Επικύρωση
   if (!data.from || !data.to){ flash('err','<i class="fas fa-exclamation-circle"></i> Please fill in From and To'); return; }
+  if (data.wantsInvoice && !data.invoiceAfm){
+    flash('err','<i class="fas fa-exclamation-circle"></i> Please enter a VAT number for the invoice');
+    return;
+  }
+  if (data.wantsInvoice && data.invoiceAfm && !isValidGreekAfm(data.invoiceAfm)){
+    flash('err','<i class="fas fa-exclamation-circle"></i> The VAT number is not valid — please check it');
+    return;
+  }
   if (!data.name){ flash('err','<i class="fas fa-exclamation-circle"></i> Please enter your full name'); return; }
   if (!document.getElementById('phone').value.trim()){ flash('err','<i class="fas fa-exclamation-circle"></i> Please enter your phone number'); return; }
   if (!data.date || !data.time){ flash('err','<i class="fas fa-exclamation-circle"></i> Please select date and time'); return; }
@@ -1697,10 +1780,38 @@ function renderSuggestions(id, suggestions){
   list.classList.add('open');
 }
 
+function showRouteSuggestions(pickedId, client){
+  const area = document.getElementById('routeSuggestArea');
+  const chipsBox = document.getElementById('routeSuggestChips');
+  if (!client.routes || !client.routes.length){
+    area.style.display = 'none';
+    return;
+  }
+  const otherId = pickedId === 'from' ? 'to' : 'from';
+  chipsBox.innerHTML = '';
+  client.routes.forEach(r => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.textContent = r.toName;
+    chip.style.cssText = 'padding:6px 12px;border-radius:16px;border:1px solid var(--primary-color);'+
+      'background:transparent;color:var(--primary-color);font-size:12.5px;cursor:pointer;';
+    chip.addEventListener('click', ()=>{
+      document.getElementById(otherId).value = r.toName;
+      if (otherId === 'from'){ state.fromLat = r.toLat; state.fromLng = r.toLng; }
+      else { state.toLat = r.toLat; state.toLng = r.toLng; }
+      area.style.display = 'none';
+      scheduleEstimate();
+    });
+    chipsBox.appendChild(chip);
+  });
+  area.style.display = 'block';
+}
+
 async function pickSuggestion(id, idx){
   const st = acState[id];
   const s = st.items[idx];
   if (!s) return;
+  document.getElementById('routeSuggestArea').style.display = 'none';
   state.userPickedVeh = false;
 
   // Επιλογή γνωστού πελάτη — γέμισε απευθείας με τη διεύθυνση/συντεταγμένες
@@ -1711,6 +1822,7 @@ async function pickSuggestion(id, idx){
     if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; }
     else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; }
     state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
+    showRouteSuggestions(id, c);
     scheduleEstimate();
     closeAc(id);
     return;
@@ -1732,7 +1844,7 @@ async function pickSuggestion(id, idx){
   try{
     const place = s.placePrediction.toPlace();
     await place.fetchFields({ fields:['formattedAddress','location','displayName'] });
-    const text = place.formattedAddress || (place.displayName || '');
+    const text = place.displayName || place.formattedAddress || '';
     const lat = place.location ? place.location.lat() : null;
     const lng = place.location ? place.location.lng() : null;
     document.getElementById(id).value = text;
@@ -2244,6 +2356,7 @@ document.getElementById('name').addEventListener('input', ()=>{
 /* ---- Συχνές διαδρομές (γνωστοί πελάτες) — ΕΝΣΩΜΑΤΩΜΕΝΟΙ μέσα στη λίστα
    αυτόματης συμπλήρωσης, ίδιο με το Android app. ---- */
 let _frequentClients = [];
+let _clientsLoaded = false;
 async function loadFrequentClients(){
   try{
     const res = await fetch(CLIENTS_ENDPOINT, {
@@ -2252,9 +2365,57 @@ async function loadFrequentClients(){
       body: JSON.stringify({ tenantId: EFORM_ID }),
     });
     const j = await res.json();
-    if (!j.ok || !Array.isArray(j.clients)) return;
-    _frequentClients = j.clients;
+    if (j.ok && Array.isArray(j.clients)) _frequentClients = j.clients;
   }catch(e){ console.error('loadFrequentClients error:', e); }
+  finally {
+    _clientsLoaded = true;
+    maybeActivateClientsOnlyMode();
+  }
+}
+
+let _placesEnabledLoaded = false;
+let _clientsOnlyActivated = false;
+function maybeActivateClientsOnlyMode(){
+  if (_clientsOnlyActivated) return;
+  if (!_clientsLoaded || !_placesEnabledLoaded) return;
+  if (_placesEnabled) return;
+  _clientsOnlyActivated = true;
+  activateClientsOnlyMode();
+}
+function activateClientsOnlyMode(){
+  ['from', 'to'].forEach(id => {
+    const input = document.getElementById(id);
+    const wrap = input.closest('.ac-wrap');
+    if (!wrap) return;
+    const select = document.createElement('select');
+    select.id = id + 'ClientSelect';
+    select.className = 'clients-only-select';
+    select.innerHTML = '<option value="">— Select partner —</option>' +
+      _frequentClients.map((c, i) =>
+        '<option value="'+i+'">'+escapeHtml(c.name)+(c.fromName ? ' — '+escapeHtml(c.fromName) : '')+'</option>'
+      ).join('');
+    select.addEventListener('change', function(){
+      state.userPickedVeh = false;
+      document.getElementById('routeSuggestArea').style.display = 'none';
+      if (this.value === ''){
+        if (id==='from'){ state.fromLat=null; state.fromLng=null; }
+        else { state.toLat=null; state.toLng=null; }
+        return;
+      }
+      const c = _frequentClients[Number(this.value)];
+      if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; }
+      else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; }
+      state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
+      showRouteSuggestions(id, c);
+      scheduleEstimate();
+    });
+    input.style.display = 'none';
+    const gpsBtn = wrap.parentElement.querySelector('.gps-btn[data-target="'+id+'"]');
+    const mapBtn = wrap.parentElement.querySelector('.map-btn[data-target="'+id+'"]');
+    if (gpsBtn) gpsBtn.style.display = 'none';
+    if (mapBtn) mapBtn.style.display = 'none';
+    wrap.insertBefore(select, wrap.firstChild);
+  });
 }
 
 function matchingClients(query){
@@ -2299,10 +2460,14 @@ async function loadTenantBusinessInfo(){
     // Διακόπτες master — αν οποιοσδήποτε έχει κοπεί, ενημέρωσε αμέσως το UI.
     _mapEnabled = j.mapEnabled !== false;
     _placesEnabled = j.placesEnabled !== false;
+    _placesEnabledLoaded = true;
+    maybeActivateClientsOnlyMode();
     if (!_mapEnabled) renderRouteMap();
     if (j.mapsApiKey) _tenantMapsApiKey = j.mapsApiKey;
   }catch(e){
     console.error('loadTenantBusinessInfo error:', e);
+    _placesEnabledLoaded = true;
+    maybeActivateClientsOnlyMode();
   } finally {
     // Φόρτωσε το Google Maps ό,τι κι αν έγινε παραπάνω (fallback στο δικό
     // μας κλειδί αν κάτι απέτυχε ή ο tenant δεν έχει βάλει δικό του).
