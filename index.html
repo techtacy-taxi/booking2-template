@@ -1001,7 +1001,11 @@ async function fetchEstimate(){
     lastEstimate = { price:j.price||0, nightApplies:!!j.nightApplies, blocked:!!j.blocked, reasons:j.reasons||[],
       displayOriginal:j.displayOriginal||0, discountPercent:(j.discountPercent!=null?j.discountPercent:8), minChargeApplied:!!j.minChargeApplied,
       distanceKm:j.distanceKm||0, durationMin:j.durationMin||0, routePolyline:j.routePolyline||null };
-    if (j.depositPercent > 0) _depositPercent = j.depositPercent;
+    // ⚠️ ΔΙΟΡΘΩΣΗ: πριν, "> 0" σήμαινε ότι ΠΟΤΕ δεν ενημερωνόταν το
+    // _depositPercent σε 0 — έμενε κολλημένο στην προηγούμενη/default τιμή,
+    // ακόμα κι όταν ο server σωστά έστελνε 0% (καμία προκαταβολή). Τώρα
+    // δεχόμαστε οποιαδήποτε μη-αρνητική τιμή, ΣΥΜΠΕΡΙΛΑΜΒΑΝΟΜΕΝΟΥ του 0.
+    if (j.depositPercent != null && j.depositPercent >= 0) _depositPercent = j.depositPercent;
     state.fullPaymentEnabled = j.fullPaymentEnabled !== false;
     state.paymentProvider = j.paymentProvider === 'stripe' ? 'stripe' : 'viva';
     state.shuttleAvailable = !!j.shuttleAvailable;
@@ -2422,6 +2426,10 @@ function clientMatchesTags(client, tags){
    αυτόματης συμπλήρωσης, ίδιο με το Android app. ---- */
 let _frequentClients = [];
 let _clientsLoaded = false;
+let _clientsOnlyBooking = false;
+let _clientsOnlyActivated2 = false;
+let _clientsCatalogMode = false;
+let _catalogModeActivated = false;
 async function loadFrequentClients(){
   try{
     const res = await fetch(CLIENTS_ENDPOINT, {
@@ -2435,6 +2443,26 @@ async function loadFrequentClients(){
       _frequentClients = tagGroups.length
         ? j.clients.filter(c => clientMatchesTagGroups(c, tagGroups))
         : j.clients;
+      // ── «Μόνο πελάτες» — ΔΙΚΟΣ ΤΟΥ tenant διακόπτης (Δυναμικοί Τύποι
+      // → clientsOnlyBooking), ΞΕΧΩΡΙΣΤΟΣ από το placesEnabled του master.
+      // Πριν, αυτή η φόρμα ενεργοποιούσε clients-only mode ΜΟΝΟ όταν ήταν
+      // κλειστό το placesEnabled — τώρα σέβεται και το ρητό flag του tenant,
+      // ίδιο με το el/booking.html.
+      if (j.clientsOnlyBooking === true && !_clientsOnlyActivated2){
+        _clientsOnlyActivated2 = true;
+        _clientsOnlyBooking = true;
+        activateClientsOnlyMode();
+      }
+      // ── «Κατάλογος Από/Προς (με Άλλο)» — έλειπε ΕΝΤΕΛΩΣ από αυτό το
+      // αρχείο (μόνο το el/booking.html το είχε). Ίδια λογική με το
+      // clientsOnlyBooking παραπάνω: ενεργό ΜΟΝΟ αν το tenant το έχει
+      // ρητά ενεργοποιημένο, και ΜΟΝΟ αν clientsOnlyBooking δεν είναι ήδη
+      // ενεργό (αμοιβαία αποκλειόμενα, όπως δείχνει και το admin panel).
+      if (j.clientsCatalogMode === true && !_clientsOnlyBooking && !_catalogModeActivated){
+        _catalogModeActivated = true;
+        _clientsCatalogMode = true;
+        activateCatalogMode();
+      }
     }
   }catch(e){ console.error('loadFrequentClients error:', e); }
   finally {
@@ -2528,6 +2556,57 @@ function activateClientsOnlyMode(){
       onSelect: (value) => {
         state.userPickedVeh = false;
         document.getElementById('routeSuggestArea').style.display = 'none';
+        if (value === ''){
+          if (id==='from'){ state.fromLat=null; state.fromLng=null; }
+          else { state.toLat=null; state.toLng=null; }
+          return;
+        }
+        const c = _frequentClients[Number(value)];
+        if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; }
+        else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; }
+        state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
+        showRouteSuggestions(id, c);
+        scheduleEstimate();
+      },
+    });
+  });
+}
+
+// ── Κατάλογος Από/Προς (με «Άλλο») — ίδιο dropdown με το clients-only mode,
+// αλλά με επιπλέον επιλογή «Άλλο (γράψτε διεύθυνση)» που επαναφέρει το
+// κανονικό πεδίο κειμένου/Google Places. Έλειπε εντελώς από αυτό το αρχείο
+// (μόνο το el/booking.html το είχε) — προστέθηκε εδώ, ίδιο pattern.
+function activateCatalogMode(){
+  ['from', 'to'].forEach(id => {
+    const input = document.getElementById(id);
+    const wrap = input.closest('.ac-wrap');
+    if (!wrap) return;
+    const inputWithMap = wrap.querySelector('.input-with-map');
+    if (inputWithMap) inputWithMap.style.display = 'none';
+    const oldAcList = wrap.querySelector('.ac-list');
+    if (oldAcList) oldAcList.style.display = 'none';
+    const gpsBtn = wrap.parentElement.querySelector('.gps-btn[data-target="'+id+'"]');
+    const mapBtn = wrap.parentElement.querySelector('.map-btn[data-target="'+id+'"]');
+    const dd = buildPartnerDropdown(wrap, {
+      id,
+      placeholder: '— Select partner —',
+      options: _frequentClients,
+      getLabel: (c) => ({ main: c.name, sub: c.fromName || '' }),
+      extraOption: { label: 'Other (type address)', value: 'other' },
+      onSelect: (value) => {
+        state.userPickedVeh = false;
+        document.getElementById('routeSuggestArea').style.display = 'none';
+        if (value === 'other'){
+          dd.hide();
+          if (inputWithMap) inputWithMap.style.display = '';
+          input.value = '';
+          input.focus();
+          if (gpsBtn) gpsBtn.style.display = '';
+          if (mapBtn) mapBtn.style.display = '';
+          if (id==='from'){ state.fromLat=null; state.fromLng=null; }
+          else { state.toLat=null; state.toLng=null; }
+          return;
+        }
         if (value === ''){
           if (id==='from'){ state.fromLat=null; state.fromLng=null; }
           else { state.toLat=null; state.toLng=null; }
