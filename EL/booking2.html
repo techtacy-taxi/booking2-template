@@ -783,6 +783,7 @@ const ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/submi
 const ESTIMATE_ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/estimatePrice";
 const CLIENTS_ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/listClients";
 const VIVA_ORDER_ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/createVivaOrder";
+const STRIPE_CHECKOUT_ENDPOINT = "https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/createStripeCheckoutSession";
 
 /* ── Multi-tenant (Φάση 4) ─────────────────────────────────────────────────
    ΜΟΝΟ αυτή η γραμμή αλλάζει ανάμεσα σε booking.html (εσένα) και σε κάθε
@@ -805,7 +806,7 @@ const state = { persons:2, luggage:2, seats:0, veh:'taxi', autoVan:false,
   shuttleAvailable:false, shuttlePricePerPerson:0, userPickedVeh:false,
   clientHasShuttle:false, fromClientShuttle:false, toClientShuttle:false,
   shuttleSlotOptions:null, selectedShuttleTime:null,
-  noRouteAvailable:false, fullPaymentEnabled:true, wantsInvoice:false };
+  noRouteAvailable:false, fullPaymentEnabled:true, wantsInvoice:false, paymentProvider:'viva' };
 const BUS_PERSON_THRESHOLD = 9; // άτομα >= 9 -> ΥΠΟΧΡΕΩΤΙΚΟ Λεωφορείο (το Βαν παίρνει μέχρι 8)
 
 /* ---- Counters ---- */
@@ -1001,6 +1002,7 @@ async function fetchEstimate(){
       distanceKm:j.distanceKm||0, durationMin:j.durationMin||0, routePolyline:j.routePolyline||null };
     if (j.depositPercent > 0) _depositPercent = j.depositPercent;
     state.fullPaymentEnabled = j.fullPaymentEnabled !== false;
+    state.paymentProvider = j.paymentProvider === 'stripe' ? 'stripe' : 'viva';
     state.shuttleAvailable = !!j.shuttleAvailable;
     state.shuttlePricePerPerson = j.shuttlePricePerPerson || 0;
     state.noRouteAvailable = !!j.noRouteAvailable;
@@ -1279,6 +1281,8 @@ function gather(){
     invoiceCompanyName: document.getElementById('invoiceCompanyName').value.trim(),
     invoiceAfm: document.getElementById('invoiceAfm').value.trim(),
     invoiceAddress: document.getElementById('invoiceAddress').value.trim(),
+    successUrl: window.location.origin + window.location.pathname,
+    cancelUrl: window.location.origin + window.location.pathname,
   };
 }
 
@@ -1335,9 +1339,12 @@ btn.addEventListener('click', async ()=>{
     }
 
     // ΔΕΝ καλούμε πια το submitPublicBooking απευθείας. Πρώτα δημιουργούμε
-    // Viva payment order για το 10% προκαταβολή· η δουλειά αποθηκεύεται στο
-    // saved_jobs ΜΟΝΟ μετά από επιτυχή πληρωμή (webhook vivaWebhook στο index.js).
-    const res = await fetch(VIVA_ORDER_ENDPOINT, {
+    // payment order (Viva ή Stripe, ανάλογα με τον ενεργό πάροχο του tenant)
+    // για το ποσό που πρέπει να πληρωθεί online· η δουλειά αποθηκεύεται στο
+    // saved_jobs ΜΟΝΟ μετά από επιτυχή πληρωμή (webhook — vivaWebhook ή
+    // stripeWebhook, ανάλογα).
+    const paymentEndpoint = state.paymentProvider === 'stripe' ? STRIPE_CHECKOUT_ENDPOINT : VIVA_ORDER_ENDPOINT;
+    const res = await fetch(paymentEndpoint, {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify(data)
@@ -2534,11 +2541,12 @@ function activateClientsOnlyMode(){
     const input = document.getElementById(id);
     const wrap = input.closest('.ac-wrap');
     if (!wrap) return;
-    input.style.display = 'none';
-    const gpsBtn = wrap.parentElement.querySelector('.gps-btn[data-target="'+id+'"]');
-    const mapBtn = wrap.parentElement.querySelector('.map-btn[data-target="'+id+'"]');
-    if (gpsBtn) gpsBtn.style.display = 'none';
-    if (mapBtn) mapBtn.style.display = 'none';
+    // ⚠️ ΔΙΟΡΘΩΣΗ: κρύβουμε ΟΛΟΚΛΗΡΟ το .input-with-map (όχι μόνο το
+    // <input>) — αλλιώς μένει στο layout πάνω από το νέο dropdown.
+    const inputWithMap = wrap.querySelector('.input-with-map');
+    if (inputWithMap) inputWithMap.style.display = 'none';
+    const oldAcList = wrap.querySelector('.ac-list');
+    if (oldAcList) oldAcList.style.display = 'none';
     buildPartnerDropdown(wrap, {
       id,
       placeholder: '— Διαλέξτε πελάτη —',
