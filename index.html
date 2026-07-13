@@ -452,6 +452,9 @@ body.is-mobile .map-gps{display:flex;}
 .partner-select-item.sel .psi-main{color:var(--dark-bg);}
 .partner-select-item .psi-sub{color:var(--text-muted);font-size:.74rem;margin-top:2px;}
 .partner-select-item.sel .psi-sub{color:rgba(15,20,35,.65);}
+.partner-select-item.disabled{opacity:.35;cursor:not-allowed;pointer-events:none;}
+.partner-select-group-header{padding:8px 13px 4px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--primary-color);border-top:1px solid rgba(255,255,255,.08);}
+.partner-select-group-header:first-child{border-top:none;}
 </style>
 </head>
 <body>
@@ -553,13 +556,6 @@ body.is-mobile .map-gps{display:flex;}
             </div>
           </div>
 
-          <div id="routeSuggestArea" style="display:none;background:var(--dark-secondary);border:1px solid var(--field-border);border-radius:10px;padding:10px 12px;margin-top:-6px;">
-            <div style="font-size:11.5px;color:var(--white);font-weight:700;margin-bottom:8px;">
-              <i class="fas fa-star" style="color:var(--primary-color);"></i>
-              This partner has fixed prices — pick a destination:
-            </div>
-            <div id="routeSuggestChips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-          </div>
 
           <div id="routeMapWrap" style="display:none;">
             <div id="routeMapBox" style="border-radius:12px;overflow:hidden;position:relative;height:170px;background:#12213d;margin-top:2px;">
@@ -718,7 +714,7 @@ body.is-mobile .map-gps{display:flex;}
       <div class="price-footnote" id="minChargeNote" style="display:none;">This is the minimum fare to reserve a vehicle.</div>
       <div class="price-footnote" id="priceFootnote" style="display:none;">* Night surcharge applies (23:30–05:30), as required by Greek law.</div>
 
-      <div class="deposit-banner" id="depositBanner">
+      <div class="deposit-banner" id="depositBanner" style="display:none;">
         <i class="fas fa-shield-halved"></i>
         <div style="flex:1;">
           <div class="db-title" id="depositTitle">A 10% deposit is required to book</div>
@@ -1804,38 +1800,10 @@ function renderSuggestions(id, suggestions){
   list.classList.add('open');
 }
 
-function showRouteSuggestions(pickedId, client){
-  const area = document.getElementById('routeSuggestArea');
-  const chipsBox = document.getElementById('routeSuggestChips');
-  if (!client.routes || !client.routes.length){
-    area.style.display = 'none';
-    return;
-  }
-  const otherId = pickedId === 'from' ? 'to' : 'from';
-  chipsBox.innerHTML = '';
-  client.routes.forEach(r => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.textContent = r.toName;
-    chip.style.cssText = 'padding:6px 12px;border-radius:16px;border:1px solid var(--primary-color);'+
-      'background:transparent;color:var(--primary-color);font-size:12.5px;cursor:pointer;';
-    chip.addEventListener('click', ()=>{
-      document.getElementById(otherId).value = r.toName;
-      if (otherId === 'from'){ state.fromLat = r.toLat; state.fromLng = r.toLng; }
-      else { state.toLat = r.toLat; state.toLng = r.toLng; }
-      area.style.display = 'none';
-      scheduleEstimate();
-    });
-    chipsBox.appendChild(chip);
-  });
-  area.style.display = 'block';
-}
-
 async function pickSuggestion(id, idx){
   const st = acState[id];
   const s = st.items[idx];
   if (!s) return;
-  document.getElementById('routeSuggestArea').style.display = 'none';
   state.userPickedVeh = false;
 
   // Επιλογή γνωστού πελάτη — γέμισε απευθείας με τη διεύθυνση/συντεταγμένες
@@ -1846,7 +1814,6 @@ async function pickSuggestion(id, idx){
     if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; }
     else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; }
     state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
-    showRouteSuggestions(id, c);
     scheduleEstimate();
     closeAc(id);
     return;
@@ -2425,11 +2392,39 @@ function clientMatchesTags(client, tags){
 /* ---- Συχνές διαδρομές (γνωστοί πελάτες) — ΕΝΣΩΜΑΤΩΜΕΝΟΙ μέσα στη λίστα
    αυτόματης συμπλήρωσης, ίδιο με το Android app. ---- */
 let _frequentClients = [];
+let _locationOptions = [];
 let _clientsLoaded = false;
 let _clientsOnlyBooking = false;
 let _clientsOnlyActivated2 = false;
 let _clientsCatalogMode = false;
 let _catalogModeActivated = false;
+
+// ── Ενοποιημένη λίστα «Πελάτες» + «Σημεία/Διαδρομές» (π.χ. Αεροδρόμιο,
+// Λιμάνι Ραφήνας) για το dropdown — ΜΟΝΟ όταν είναι ενεργό clientsOnlyBooking
+// ή clientsCatalogMode. Κάθε αντικείμενο έχει isRoutePoint:true/false ώστε
+// το dropdown να μπορεί να ομαδοποιήσει οπτικά (πρώτα Πελάτες, μετά Σημεία).
+function buildLocationOptions(){
+  const seen = new Set();
+  const opts = [];
+  _frequentClients.forEach(c => {
+    const key = (c.name || '').toLowerCase().trim();
+    if (key && c.fromLat != null && !seen.has(key)){
+      seen.add(key);
+      opts.push({ name: c.name, fromName: c.fromName, fromLat: c.fromLat, fromLng: c.fromLng, hasShuttleBus: !!c.hasShuttleBus, isRoutePoint: false });
+    }
+    (c.routes || []).forEach(r => {
+      const rkey = (r.toName || '').toLowerCase().trim();
+      if (rkey && r.toLat != null && !seen.has(rkey)){
+        seen.add(rkey);
+        opts.push({ name: r.toName, fromName: '', fromLat: r.toLat, fromLng: r.toLng, hasShuttleBus: false, isRoutePoint: true });
+      }
+    });
+  });
+  // Πελάτες πρώτα, μετά μεμονωμένα σημεία — ίδια σειρά με την ομαδοποίηση.
+  opts.sort((a, b) => (a.isRoutePoint === b.isRoutePoint) ? 0 : (a.isRoutePoint ? 1 : -1));
+  return opts;
+}
+
 async function loadFrequentClients(){
   try{
     const res = await fetch(CLIENTS_ENDPOINT, {
@@ -2443,6 +2438,7 @@ async function loadFrequentClients(){
       _frequentClients = tagGroups.length
         ? j.clients.filter(c => clientMatchesTagGroups(c, tagGroups))
         : j.clients;
+      _locationOptions = buildLocationOptions();
       // ── «Μόνο πελάτες» — ΔΙΚΟΣ ΤΟΥ tenant διακόπτης (Δυναμικοί Τύποι
       // → clientsOnlyBooking), ΞΕΧΩΡΙΣΤΟΣ από το placesEnabled του master.
       // Πριν, αυτή η φόρμα ενεργοποιούσε clients-only mode ΜΟΝΟ όταν ήταν
@@ -2485,7 +2481,7 @@ function maybeActivateClientsOnlyMode(){
    χρυσό accent στο επιλεγμένο, δύο γραμμές (όνομα έντονο + διεύθυνση
    απαλή) ανά partner, αντί για το άσχημο default browser <select>. */
 function buildPartnerDropdown(wrap, opts){
-  const { id, placeholder, options, getLabel, onSelect, extraOption } = opts;
+  const { id, placeholder, options, getLabel, onSelect, extraOption, getGroupLabel, isDisabled } = opts;
   const btn = document.createElement('div');
   btn.className = 'partner-select-btn';
   btn.tabIndex = 0;
@@ -2494,12 +2490,18 @@ function buildPartnerDropdown(wrap, opts){
   list.className = 'partner-select-list';
   list.id = id + 'PartnerList';
 
-  function renderRow(labelHtml, subHtml, value, selected){
+  function renderRow(labelHtml, subHtml, value, selected, disabled){
     const row = document.createElement('div');
-    row.className = 'partner-select-item' + (selected ? ' sel' : '');
+    row.className = 'partner-select-item' + (selected ? ' sel' : '') + (disabled ? ' disabled' : '');
     row.dataset.value = value;
     row.innerHTML = '<div class="psi-main">'+labelHtml+'</div>' + (subHtml ? '<div class="psi-sub">'+subHtml+'</div>' : '');
     return row;
+  }
+  function renderGroupHeader(label){
+    const h = document.createElement('div');
+    h.className = 'partner-select-group-header';
+    h.textContent = label;
+    return h;
   }
 
   let selectedValue = '';
@@ -2507,15 +2509,25 @@ function buildPartnerDropdown(wrap, opts){
   function open(){ list.classList.add('open'); }
   function refreshRows(){
     list.innerHTML = '';
-    list.appendChild(renderRow(escapeHtml(placeholder), '', '', selectedValue === ''));
+    list.appendChild(renderRow(escapeHtml(placeholder), '', '', selectedValue === '', false));
+    // ── Ομαδοποίηση (προαιρετική): αν δοθεί getGroupLabel, μπαίνει επικεφαλίδα
+    // κάθε φορά που αλλάζει η ομάδα (π.χ. "Πελάτες" → "Σημεία / Διαδρομές").
+    // Χωρίς getGroupLabel, συμπεριφορά ίδια όπως πριν (flat λίστα).
+    let lastGroup = undefined;
     options.forEach((c, i) => {
+      if (getGroupLabel){
+        const g = getGroupLabel(c);
+        if (g !== lastGroup){ list.appendChild(renderGroupHeader(g)); lastGroup = g; }
+      }
       const { main, sub } = getLabel(c);
-      list.appendChild(renderRow(escapeHtml(main), sub ? escapeHtml(sub) : '', String(i), selectedValue === String(i)));
+      const disabled = isDisabled ? !!isDisabled(c, i) : false;
+      list.appendChild(renderRow(escapeHtml(main), sub ? escapeHtml(sub) : '', String(i), selectedValue === String(i), disabled));
     });
     if (extraOption){
-      list.appendChild(renderRow(escapeHtml(extraOption.label), '', extraOption.value, selectedValue === extraOption.value));
+      list.appendChild(renderRow(escapeHtml(extraOption.label), '', extraOption.value, selectedValue === extraOption.value, false));
     }
     list.querySelectorAll('.partner-select-item').forEach(row => {
+      if (row.classList.contains('disabled')) return; // ΔΕΝ κλικάρεται
       row.addEventListener('click', () => {
         selectedValue = row.dataset.value;
         btn.querySelector('.psb-label').textContent = row.querySelector('.psi-main').textContent;
@@ -2525,57 +2537,72 @@ function buildPartnerDropdown(wrap, opts){
     });
   }
   refreshRows();
-  btn.addEventListener('click', () => { if (list.classList.contains('open')) close(); else { open(); } });
+  btn.addEventListener('click', () => { if (list.classList.contains('open')) close(); else { refreshRows(); open(); } });
   document.addEventListener('click', (e) => { if (!wrap.contains(e.target)) close(); });
   wrap.appendChild(btn);
   wrap.appendChild(list);
   return {
     setLabel(text){ btn.querySelector('.psb-label').textContent = text; },
     reset(){ selectedValue=''; btn.querySelector('.psb-label').textContent = placeholder; refreshRows(); },
+    refresh(){ refreshRows(); },
     showAsInputReplacement(){ btn.style.display=''; list.style.display=''; },
     hide(){ btn.style.display='none'; close(); },
   };
 }
+
+// ── Κοινή αναφορά και για τα δύο dropdown (from/to) ώστε το ένα να μπορεί
+// να ξαναζωγραφίσει το άλλο όταν αλλάζει επιλογή (mutual exclusion: ό,τι
+// διάλεξες στο Από εξαφανίζεται από το Προς και ανάποδα — δεν επιτρέπεται
+// να πας από ένα σημείο στο ίδιο σημείο).
+let _fromDropdown = null, _toDropdown = null;
+let _fromSelectedIdx = null, _toSelectedIdx = null; // index μέσα στο _locationOptions, ή 'other', ή null
 
 function activateClientsOnlyMode(){
   ['from', 'to'].forEach(id => {
     const input = document.getElementById(id);
     const wrap = input.closest('.ac-wrap');
     if (!wrap) return;
-    // ⚠️ ΔΙΟΡΘΩΣΗ: κρύβουμε ΟΛΟΚΛΗΡΟ το .input-with-map (όχι μόνο το
-    // <input>) — αλλιώς μένει στο layout πάνω από το νέο dropdown.
     const inputWithMap = wrap.querySelector('.input-with-map');
     if (inputWithMap) inputWithMap.style.display = 'none';
     const oldAcList = wrap.querySelector('.ac-list');
     if (oldAcList) oldAcList.style.display = 'none';
-    buildPartnerDropdown(wrap, {
+    const dd = buildPartnerDropdown(wrap, {
       id,
-      placeholder: '— Select partner —',
-      options: _frequentClients,
+      placeholder: '— Available destinations —',
+      options: _locationOptions,
       getLabel: (c) => ({ main: c.name, sub: c.fromName || '' }),
+      getGroupLabel: (c) => c.isRoutePoint ? 'Points / Routes' : 'Partners',
+      isDisabled: (c, i) => {
+        const otherIdx = id === 'from' ? _toSelectedIdx : _fromSelectedIdx;
+        return otherIdx === i;
+      },
       onSelect: (value) => {
         state.userPickedVeh = false;
-        document.getElementById('routeSuggestArea').style.display = 'none';
         if (value === ''){
-          if (id==='from'){ state.fromLat=null; state.fromLng=null; }
-          else { state.toLat=null; state.toLng=null; }
+          if (id==='from'){ state.fromLat=null; state.fromLng=null; _fromSelectedIdx=null; }
+          else { state.toLat=null; state.toLng=null; _toSelectedIdx=null; }
+          if (id==='from' && _toDropdown) _toDropdown.refresh();
+          if (id==='to' && _fromDropdown) _fromDropdown.refresh();
           return;
         }
-        const c = _frequentClients[Number(value)];
-        if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; }
-        else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; }
+        const c = _locationOptions[Number(value)];
+        if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; _fromSelectedIdx=Number(value); }
+        else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; _toSelectedIdx=Number(value); }
         state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
-        showRouteSuggestions(id, c);
+        // ── Ενημέρωσε ΚΑΙ το άλλο dropdown ώστε να απενεργοποιήσει/
+        // ενεργοποιήσει τη σωστή επιλογή (mutual exclusion).
+        if (id==='from' && _toDropdown) _toDropdown.refresh();
+        if (id==='to' && _fromDropdown) _fromDropdown.refresh();
         scheduleEstimate();
       },
     });
+    if (id === 'from') _fromDropdown = dd; else _toDropdown = dd;
   });
 }
 
 // ── Κατάλογος Από/Προς (με «Άλλο») — ίδιο dropdown με το clients-only mode,
 // αλλά με επιπλέον επιλογή «Άλλο (γράψτε διεύθυνση)» που επαναφέρει το
-// κανονικό πεδίο κειμένου/Google Places. Έλειπε εντελώς από αυτό το αρχείο
-// (μόνο το el/booking.html το είχε) — προστέθηκε εδώ, ίδιο pattern.
+// κανονικό πεδίο κειμένου/Google Places.
 function activateCatalogMode(){
   ['from', 'to'].forEach(id => {
     const input = document.getElementById(id);
@@ -2589,13 +2616,17 @@ function activateCatalogMode(){
     const mapBtn = wrap.parentElement.querySelector('.map-btn[data-target="'+id+'"]');
     const dd = buildPartnerDropdown(wrap, {
       id,
-      placeholder: '— Select partner —',
-      options: _frequentClients,
+      placeholder: '— Available destinations —',
+      options: _locationOptions,
       getLabel: (c) => ({ main: c.name, sub: c.fromName || '' }),
+      getGroupLabel: (c) => c.isRoutePoint ? 'Points / Routes' : 'Partners',
       extraOption: { label: 'Other (type address)', value: 'other' },
+      isDisabled: (c, i) => {
+        const otherIdx = id === 'from' ? _toSelectedIdx : _fromSelectedIdx;
+        return otherIdx === i;
+      },
       onSelect: (value) => {
         state.userPickedVeh = false;
-        document.getElementById('routeSuggestArea').style.display = 'none';
         if (value === 'other'){
           dd.hide();
           if (inputWithMap) inputWithMap.style.display = '';
@@ -2603,23 +2634,29 @@ function activateCatalogMode(){
           input.focus();
           if (gpsBtn) gpsBtn.style.display = '';
           if (mapBtn) mapBtn.style.display = '';
-          if (id==='from'){ state.fromLat=null; state.fromLng=null; }
-          else { state.toLat=null; state.toLng=null; }
+          if (id==='from'){ state.fromLat=null; state.fromLng=null; _fromSelectedIdx=null; }
+          else { state.toLat=null; state.toLng=null; _toSelectedIdx=null; }
+          if (id==='from' && _toDropdown) _toDropdown.refresh();
+          if (id==='to' && _fromDropdown) _fromDropdown.refresh();
           return;
         }
         if (value === ''){
-          if (id==='from'){ state.fromLat=null; state.fromLng=null; }
-          else { state.toLat=null; state.toLng=null; }
+          if (id==='from'){ state.fromLat=null; state.fromLng=null; _fromSelectedIdx=null; }
+          else { state.toLat=null; state.toLng=null; _toSelectedIdx=null; }
+          if (id==='from' && _toDropdown) _toDropdown.refresh();
+          if (id==='to' && _fromDropdown) _fromDropdown.refresh();
           return;
         }
-        const c = _frequentClients[Number(value)];
-        if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; }
-        else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; }
+        const c = _locationOptions[Number(value)];
+        if (id==='from'){ state.fromLat=c.fromLat; state.fromLng=c.fromLng; state.fromClientShuttle=!!c.hasShuttleBus; _fromSelectedIdx=Number(value); }
+        else { state.toLat=c.fromLat; state.toLng=c.fromLng; state.toClientShuttle=!!c.hasShuttleBus; _toSelectedIdx=Number(value); }
         state.clientHasShuttle = !!(state.fromClientShuttle || state.toClientShuttle);
-        showRouteSuggestions(id, c);
+        if (id==='from' && _toDropdown) _toDropdown.refresh();
+        if (id==='to' && _fromDropdown) _fromDropdown.refresh();
         scheduleEstimate();
       },
     });
+    if (id === 'from') _fromDropdown = dd; else _toDropdown = dd;
   });
 }
 
