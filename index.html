@@ -159,9 +159,9 @@ body{
 .card-head .sub{color:var(--primary-color);font-size:.8rem;font-weight:600;}
 
 .card-body{padding:24px 26px 28px;}
-.col2{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+.col2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;}
 @media (max-width:620px){.col2{grid-template-columns:1fr;gap:16px;}}
-.colstack{display:flex;flex-direction:column;gap:15px;}
+.colstack{display:flex;flex-direction:column;gap:15px;min-width:0;}
 
 .fld label{
   color:#cdd6ee;font-size:.78rem;font-weight:600;
@@ -1167,14 +1167,21 @@ function renderPrice(){
   document.getElementById('minChargeNote').style.display   = lastEstimate.minChargeApplied ? 'block' : 'none';
 
   const blocked = lastEstimate.blocked;
-  // ⚠️ ΔΙΟΡΘΩΣΗ: πριν, "!blocked" ΜΟΝΟ σήμαινε ορατό banner — αλλά χωρίς
-  // Από/Προς επιλεγμένα, lastEstimate.blocked είναι false ΑΠΟ ΠΡΟΕΠΙΛΟΓΗ
-  // (default state), οπότε το banner εμφανιζόταν αμέσως στη φόρτωση της
-  // σελίδας, πριν καν υπάρχει πραγματική τιμή. Τώρα απαιτείται ΕΠΙΠΛΕΟΝ
-  // πραγματική τιμή (price > 0) για να εμφανιστεί.
+  // ── Regulated payment options: a 0% deposit and/or a disabled "full
+  // payment" can leave only ONE option (used directly) or NONE at all
+  // (noPaymentMode — booking proceeds directly, no online payment step).
+  // Moved this calculation earlier so the visibility logic below can use it.
+  const noDeposit = _depositPercent <= 0;
+  const noFull = !state.fullPaymentEnabled;
+  state.noPaymentMode = noDeposit && noFull;
+  // ⚠️ ΔΙΟΡΘΩΣΗ: το banner ΔΕΝ πρέπει να φαίνεται με τυχαίο/προσωρινό
+  // μήνυμα πριν υπάρχει τιμή — ΕΚΤΟΣ αν noPaymentMode είναι ενεργό, οπότε
+  // το μήνυμα "χωρίς προπληρωμή" ΔΕΝ εξαρτάται καθόλου από την τιμή και
+  // πρέπει να φαίνεται αμέσως (tenant-level ρύθμιση, όχι per-estimate).
   const hasValidPrice = lastEstimate.price > 0;
   document.getElementById('actionArea').style.display = blocked ? 'none'  : 'block';
-  document.getElementById('depositBanner').style.display = (blocked || !hasValidPrice) ? 'none' : 'flex';
+  document.getElementById('depositBanner').style.display =
+    blocked ? 'none' : (state.noPaymentMode || hasValidPrice) ? 'flex' : 'none';
   document.getElementById('waArea').style.display      = blocked ? 'block' : 'none';
   if (blocked){
     document.getElementById('waReasonText').textContent = reasonLabel(lastEstimate.reasons[0]) + '.';
@@ -1182,12 +1189,6 @@ function renderPrice(){
     document.getElementById('waLink').href = 'https://wa.me/' + (_tenantWhatsappNumber || 'YOUR_WHATSAPP_NUMBER') + '?text=' + encodeURIComponent(msg);
   }
 
-  // Regulated payment options: a 0% deposit and/or a disabled "full payment"
-  // can leave only ONE option (used directly, no asking) or NONE (booking
-  // proceeds directly with no payment at all — see submit handler below).
-  const noDeposit = _depositPercent <= 0;
-  const noFull = !state.fullPaymentEnabled;
-  state.noPaymentMode = noDeposit && noFull;
   const payModeRow = document.querySelector('#depositBanner .pay-mode');
   if (state.noPaymentMode) {
     payModeRow.style.display = 'none';

@@ -159,9 +159,9 @@ body{
 .card-head .sub{color:var(--primary-color);font-size:.8rem;font-weight:600;}
 
 .card-body{padding:24px 26px 28px;}
-.col2{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+.col2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;}
 @media (max-width:620px){.col2{grid-template-columns:1fr;gap:16px;}}
-.colstack{display:flex;flex-direction:column;gap:15px;}
+.colstack{display:flex;flex-direction:column;gap:15px;min-width:0;}
 
 .fld label{
   color:#cdd6ee;font-size:.78rem;font-weight:600;
@@ -1173,9 +1173,19 @@ function renderPrice(){
   document.getElementById('minChargeNote').style.display   = lastEstimate.minChargeApplied ? 'block' : 'none';
 
   const blocked = lastEstimate.blocked;
+  // ── Ρυθμιζόμενες επιλογές πληρωμής: 0% προκαταβολή ή/και απενεργοποιημένη
+  // «Πλήρης πληρωμή» μπορεί να αφήσουν μόνο ΜΙΑ επιλογή ή ΚΑΜΙΑ (noPaymentMode).
+  // Μετακινήθηκε νωρίτερα ώστε η ορατότητα του banner να το χρησιμοποιεί.
+  const noDeposit = _depositPercent <= 0;
+  const noFull = !state.fullPaymentEnabled;
+  state.noPaymentMode = noDeposit && noFull;
+  // ⚠️ ΔΙΟΡΘΩΣΗ: το banner ΔΕΝ πρέπει να φαίνεται με προσωρινό μήνυμα πριν
+  // υπάρχει τιμή — ΕΚΤΟΣ αν noPaymentMode είναι ενεργό, οπότε το μήνυμα
+  // «χωρίς προπληρωμή» ΔΕΝ εξαρτάται από την τιμή και πρέπει να φαίνεται αμέσως.
   const hasValidPrice = lastEstimate.price > 0;
   document.getElementById('actionArea').style.display = blocked ? 'none'  : 'block';
-  document.getElementById('depositBanner').style.display = (blocked || !hasValidPrice) ? 'none' : 'flex';
+  document.getElementById('depositBanner').style.display =
+    blocked ? 'none' : (state.noPaymentMode || hasValidPrice) ? 'flex' : 'none';
   document.getElementById('waArea').style.display      = blocked ? 'block' : 'none';
   if (blocked){
     document.getElementById('waReasonText').textContent = reasonLabel(lastEstimate.reasons[0]) + '.';
@@ -1183,13 +1193,6 @@ function renderPrice(){
     document.getElementById('waLink').href = 'https://wa.me/' + (_tenantWhatsappNumber || 'YOUR_WHATSAPP_NUMBER') + '?text=' + encodeURIComponent(msg);
   }
 
-  // ── Ρυθμιζόμενες επιλογές πληρωμής: 0% προκαταβολή ή/και απενεργοποιημένη
-  // «Πλήρης πληρωμή» μπορεί να αφήσουν μόνο ΜΙΑ επιλογή (χρησιμοποιείται
-  // κατευθείαν, χωρίς να ρωτάει) ή ΚΑΜΙΑ (η κράτηση γίνεται κατευθείαν
-  // χωρίς καμία πληρωμή — βλ. submit handler παρακάτω).
-  const noDeposit = _depositPercent <= 0;
-  const noFull = !state.fullPaymentEnabled;
-  state.noPaymentMode = noDeposit && noFull;
   const payModeRow = document.querySelector('#depositBanner .pay-mode');
   if (state.noPaymentMode) {
     payModeRow.style.display = 'none';
