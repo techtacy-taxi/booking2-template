@@ -423,7 +423,7 @@ body.is-mobile .map-gps{display:flex;}
 /* ---------- Custom autocomplete dropdown (Places API New) ---------- */
 .ac-wrap{position:relative;}
 .ac-item .ac-sub{color:var(--text-muted);font-size:.74rem;}
-.partner-select-btn{background:var(--field-bg);border:1px solid var(--field-border);color:var(--white);border-radius:var(--radius-sm);padding:11px 13px;font-size:.92rem;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;transition:border-color .2s ease,box-shadow .2s ease;}
+.partner-select-btn{width:100%;box-sizing:border-box;background:var(--field-bg);border:1px solid var(--field-border);color:var(--white);border-radius:var(--radius-sm);padding:11px 13px;font-size:.92rem;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;transition:border-color .2s ease,box-shadow .2s ease;}
 .partner-select-btn:hover{border-color:var(--primary-color);}
 .partner-select-btn i{color:var(--primary-color);font-size:12px;flex-shrink:0;}
 .partner-select-btn .psb-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;}
@@ -1173,8 +1173,9 @@ function renderPrice(){
   document.getElementById('minChargeNote').style.display   = lastEstimate.minChargeApplied ? 'block' : 'none';
 
   const blocked = lastEstimate.blocked;
+  const hasValidPrice = lastEstimate.price > 0;
   document.getElementById('actionArea').style.display = blocked ? 'none'  : 'block';
-  document.getElementById('depositBanner').style.display = blocked ? 'none' : 'flex';
+  document.getElementById('depositBanner').style.display = (blocked || !hasValidPrice) ? 'none' : 'flex';
   document.getElementById('waArea').style.display      = blocked ? 'block' : 'none';
   if (blocked){
     document.getElementById('waReasonText').textContent = reasonLabel(lastEstimate.reasons[0]) + '.';
