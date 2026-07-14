@@ -857,8 +857,12 @@ function updateShuttleSlotUI(){
   afterBtn.textContent  = state.shuttleSlotOptions.after;
   beforeBtn.dataset.time = state.shuttleSlotOptions.before;
   afterBtn.dataset.time  = state.shuttleSlotOptions.after;
+  // ⚠️ Αν υπάρχει ΜΙΑ διαθέσιμη ώρα (πριν == μετά), δείχνουμε ΕΝΑ κουμπί —
+  // αλλιώς εμφανίζονταν δύο ίδια, και τα δύο «επιλεγμένα» ταυτόχρονα.
+  const sameSlot = state.shuttleSlotOptions.before === state.shuttleSlotOptions.after;
+  afterBtn.style.display = sameSlot ? 'none' : '';
   beforeBtn.classList.toggle('sel', state.selectedShuttleTime === state.shuttleSlotOptions.before);
-  afterBtn.classList.toggle('sel', state.selectedShuttleTime === state.shuttleSlotOptions.after);
+  afterBtn.classList.toggle('sel', !sameSlot && state.selectedShuttleTime === state.shuttleSlotOptions.after);
 }
 document.getElementById('shuttleSlotBefore').addEventListener('click', function(){
   state.selectedShuttleTime = this.dataset.time; updateShuttleSlotUI(); renderPrice();
@@ -2534,7 +2538,9 @@ function buildPartnerDropdown(wrap, opts){
       }
       const { main, sub } = getLabel(c);
       const disabled = isDisabled ? !!isDisabled(c, i) : false;
-      list.appendChild(renderRow(escapeHtml(main), sub ? escapeHtml(sub) : '', String(i), selectedValue === String(i), disabled));
+      // 🚐 Badge Shuttle δίπλα στο όνομα — ίδιο με το κλασικό autocomplete.
+      const mainHtml = escapeHtml(main) + (c.hasShuttleBus ? ' <span style="display:inline-flex;align-items:center;gap:3px;font-size:.66rem;font-weight:700;color:#8a5a00;background:rgba(255,193,7,.25);padding:1px 7px;border-radius:9px;vertical-align:middle;"><i class="fas fa-shuttle-van"></i> Shuttle</span>' : '');
+      list.appendChild(renderRow(mainHtml, sub ? escapeHtml(sub) : '', String(i), selectedValue === String(i), disabled));
     });
     if (extraOption){
       list.appendChild(renderRow(escapeHtml(extraOption.label), '', extraOption.value, selectedValue === extraOption.value, false));
