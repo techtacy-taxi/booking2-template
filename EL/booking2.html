@@ -1012,7 +1012,7 @@ async function fetchEstimate(){
     const invoiceOptionWrap = document.getElementById('invoiceOptionWrap');
     if (invoiceOptionWrap) {
       const showInvoiceOpt = !noPaymentAtAll && j.invoiceEnabled === true &&
-        (j.invoiceProvider === 'mydata' || j.invoiceProvider === 'epsilon');
+        (j.invoiceProvider === 'mydata' || j.invoiceProvider === 'epsilon' || j.invoiceProvider === 'oxygen');
       invoiceOptionWrap.style.display = showInvoiceOpt ? 'block' : 'none';
       if (!showInvoiceOpt && state.wantsInvoice) {
         state.wantsInvoice = false;
@@ -1437,12 +1437,14 @@ try{
   const t = params.get('t') || params.get('transactionId') || params.get('TransactionId');
   const eventId = params.get('eventId') || params.get('EventId');
   const orderCode = params.get('s') || params.get('orderCode') || params.get('OrderCode');
+  // ── Stripe: το success_url επιστρέφει με ?stripe_session_id=... (το cancel χωρίς) ──
+  const stripeSession = params.get('stripe_session_id');
   console.log('[handleVivaReturn] params:', { t, eventId, orderCode, search: window.location.search });
   // Αν δεν υπάρχει ΚΑΝΕΝΑ σχετικό param → κανονική φόρτωση φόρμας.
-  if (!t && !eventId && !orderCode) return;
+  if (!t && !eventId && !orderCode && !stripeSession) return;
   // Θεωρούμε επιτυχία αν υπάρχει transaction id Ή orderCode χωρίς ρητό eventId
   // αποτυχίας (η Viva στέλνει orderCode στο success redirect).
-  const isSuccess = !!t || (!!orderCode && !eventId);
+  const isSuccess = !!t || !!stripeSession || (!!orderCode && !eventId);
 
   let info = null;
   try{ info = JSON.parse(sessionStorage.getItem('athenstaxi_pending_booking') || 'null'); }catch(e){}
