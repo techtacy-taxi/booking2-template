@@ -1339,10 +1339,14 @@ btn.addEventListener('click', async ()=>{
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify(data)
       });
-      const j = await res.json().catch(()=>({}));
+const j = await res.json().catch(()=>({}));
       if (!res.ok || !j.ok) throw new Error(j.error || ('HTTP '+res.status));
-      setBtn('ok', '<i class="fas fa-check"></i> Η κράτηση καταχωρήθηκε!');
-      setTimeout(() => { window.location.reload(); }, 2200);
+      const _wa = await ensureWhatsappNumber();
+      const _waHtml = _wa ? ('Από εδώ και πέρα η επικοινωνία θα γίνεται μέσω WhatsApp: <a href="https://wa.me/' + _wa + '" target="_blank" style="color:inherit;font-weight:700;text-decoration:underline;">+' + _wa + '</a>') : '';
+      showVivaModal(true,
+        '<div class="viva-modal-title">Η κράτηση καταχωρήθηκε!</div>' +
+        '<div class="viva-modal-text">Δεν χρειάζεται καμία online πληρωμή. <b>' + data.from + ' \u2192 ' + data.to + '</b><br>' +
+        _waHtml + '</div>', () => window.location.reload());
       return;
     }
 
@@ -1401,7 +1405,7 @@ function flash(kind, html){
 }
 
 /* ---- Pop-up modal (επιτυχία/αποτυχία πληρωμής) ---- */
-function showVivaModal(success, html){
+function showVivaModal(success, html, onClose){
   const overlay = document.createElement('div');
   overlay.className = 'viva-modal-overlay';
   overlay.innerHTML =
@@ -1411,7 +1415,7 @@ function showVivaModal(success, html){
       '<button type="button" class="viva-modal-btn">' + (success?'Τέλεια!':'Το κατάλαβα') + '</button>' +
     '</div>';
   document.body.appendChild(overlay);
-  const close = ()=>{ overlay.remove(); };
+  const close = ()=>{ overlay.remove(); if (onClose) onClose(); };
   overlay.querySelector('.viva-modal-btn').addEventListener('click', close);
   overlay.addEventListener('click', (e)=>{ if (e.target === overlay) close(); });
 }
