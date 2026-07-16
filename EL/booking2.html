@@ -1412,6 +1412,7 @@ function showVivaModal(success, html, onClose){
     '<div class="viva-modal-box ' + (success?'ok':'fail') + '">' +
       '<div class="viva-modal-icon"><i class="fas ' + (success?'fa-check-circle':'fa-times-circle') + '"></i></div>' +
       html +
+      (success ? '<div class="viva-modal-text" style="opacity:.7;font-size:.85em;margin-top:8px;"><i class="fas fa-envelope"></i> Δεν το βλέπετε; Ελέγξτε τον φάκελο Spam/Ανεπιθύμητα.</div>' : '') +
       '<button type="button" class="viva-modal-btn">' + (success?'Τέλεια!':'Το κατάλαβα') + '</button>' +
     '</div>';
   document.body.appendChild(overlay);
