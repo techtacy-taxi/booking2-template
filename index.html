@@ -1337,7 +1337,7 @@ btn.addEventListener('click', async ()=>{
 const j = await res.json().catch(()=>({}));
       if (!res.ok || !j.ok) throw new Error(j.error || ('HTTP '+res.status));
       const _wa = await ensureWhatsappNumber();
-      const _waHtml = _wa ? ('From now on, communication will happen via WhatsApp: <a href="https://wa.me/' + _wa + '" target="_blank" style="color:inherit;font-weight:700;text-decoration:underline;">+' + _wa + '</a>') : '';
+      const _waHtml = _wa ? ('We'll be in touch with you via WhatsApp for any updates you may need: <a href="https://wa.me/' + _wa + '" target="_blank" style="color:inherit;font-weight:700;text-decoration:underline;">+' + _wa + '</a>') : '';
       showVivaModal(true,
         '<div class="viva-modal-title">Your booking has been received!</div>' +
         '<div class="viva-modal-text">No online payment is required. <b>' + data.from + ' \u2192 ' + data.to + '</b><br>' +
@@ -1465,10 +1465,10 @@ try{
     let wa = '';
     try { wa = await ensureWhatsappNumber(); } catch (e) { console.error('[handleVivaReturn] ensureWhatsappNumber failed:', e); }
     const waHtml = wa
-      ? 'From now on, communication will happen via WhatsApp: ' +
+      ? 'We'll be in touch with you via WhatsApp for any updates you may need: ' +
         '<a href="https://wa.me/' + wa + '" target="_blank" ' +
         'style="color:inherit;font-weight:700;text-decoration:underline;">+' + wa + '</a>'
-      : 'From now on, communication will happen via WhatsApp.';
+      : 'We'll be in touch with you via WhatsApp for any updates you may need.';
     box.innerHTML =
       '<div class="vrb-title"><i class="fas fa-check-circle"></i> BOOKING CONFIRMED — deposit paid</div>' +
       '<div class="vrb-row"><span class="k">Route:</span><span>' + from + ' → ' + to + '</span></div>' +
@@ -2649,7 +2649,7 @@ function activateCatalogMode(){
       options: _locationOptions,
       getLabel: (c) => ({ main: c.name, sub: c.fromName || '' }),
       getGroupLabel: (c) => c.isRoutePoint ? 'Points / Routes' : 'Partners',
-      extraOption: { label: 'Other (type address)', value: 'other' },
+      extraOption: { label: 'Different address…', value: 'other' },
       isDisabled: (c, i) => {
         const otherIdx = id === 'from' ? _toSelectedIdx : _fromSelectedIdx;
         return otherIdx === i;

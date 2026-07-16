@@ -1342,7 +1342,7 @@ btn.addEventListener('click', async ()=>{
 const j = await res.json().catch(()=>({}));
       if (!res.ok || !j.ok) throw new Error(j.error || ('HTTP '+res.status));
       const _wa = await ensureWhatsappNumber();
-      const _waHtml = _wa ? ('Από εδώ και πέρα η επικοινωνία θα γίνεται μέσω WhatsApp: <a href="https://wa.me/' + _wa + '" target="_blank" style="color:inherit;font-weight:700;text-decoration:underline;">+' + _wa + '</a>') : '';
+      const _waHtml = _wa ? ('Θα είμαστε σε επικοινωνία μαζί σας μέσω WhatsApp για οποιαδήποτε ενημέρωση χρειαστεί: <a href="https://wa.me/' + _wa + '" target="_blank" style="color:inherit;font-weight:700;text-decoration:underline;">+' + _wa + '</a>') : '';
       showVivaModal(true,
         '<div class="viva-modal-title">Η κράτηση καταχωρήθηκε!</div>' +
         '<div class="viva-modal-text">Δεν χρειάζεται καμία online πληρωμή. <b>' + data.from + ' \u2192 ' + data.to + '</b><br>' +
@@ -1477,10 +1477,10 @@ try{
     let wa = '';
     try { wa = await ensureWhatsappNumber(); } catch (e) { console.error('[handleVivaReturn] ensureWhatsappNumber failed:', e); }
     const waHtml = wa
-      ? 'Από εδώ και πέρα η επικοινωνία θα γίνεται μέσω WhatsApp: ' +
+      ? 'Θα είμαστε σε επικοινωνία μαζί σας μέσω WhatsApp για οποιαδήποτε ενημέρωση χρειαστεί: ' +
         '<a href="https://wa.me/' + wa + '" target="_blank" ' +
         'style="color:inherit;font-weight:700;text-decoration:underline;">+' + wa + '</a>'
-      : 'Από εδώ και πέρα η επικοινωνία θα γίνεται μέσω WhatsApp.';
+      : 'Θα είμαστε σε επικοινωνία μαζί σας μέσω WhatsApp για οποιαδήποτε ενημέρωση χρειαστεί.';
     box.innerHTML =
       '<div class="vrb-title"><i class="fas fa-check-circle"></i> Η ΚΡΑΤΗΣΗ ΕΓΙΝΕ — η προκαταβολή πληρώθηκε</div>' +
       '<div class="vrb-row"><span class="k">Διαδρομή:</span><span>' + from + ' → ' + to + '</span></div>' +
@@ -2647,7 +2647,7 @@ function activateCatalogMode(){
       options: _locationOptions,
       getLabel: (c) => ({ main: c.name, sub: c.fromName || '' }),
       getGroupLabel: (c) => c.isRoutePoint ? 'Σημεία / Διαδρομές' : 'Πελάτες',
-      extraOption: { label: 'Άλλο (γράψτε διεύθυνση)', value: 'other' },
+      extraOption: { label: 'Διαφορετική διεύθυνση…', value: 'other' },
       isDisabled: (c, i) => {
         const otherIdx = id === 'from' ? _toSelectedIdx : _fromSelectedIdx;
         return otherIdx === i;
