@@ -464,9 +464,13 @@ body.is-mobile .map-gps{display:flex;}
 // διάλεξες (localStorage) — ίδια λογική με το index.html.
 (function(){
   try {
+    // ── Διατήρηση του #partner-filter hash σε κάθε αλλαγή γλώσσας/redirect —
+    // αλλιώς ο συνεργάτης που ανοίγει link με φίλτρο (π.χ. #villas) και
+    // ανακατευθύνεται στην άλλη γλώσσα έβλεπε ΟΛΟΥΣ τους πελάτες.
+    var keepHash = window.location.hash || '';
     var saved = localStorage.getItem('preferredLang');
     if (saved === 'en') {
-      window.location.replace('/index.html');
+      window.location.replace('/index.html' + keepHash);
       return;
     }
     if (!saved) {
@@ -474,7 +478,7 @@ body.is-mobile .map-gps{display:flex;}
       var isGreek = langs.some(function(l){ return /^el\b/i.test(l); });
       localStorage.setItem('preferredLang', isGreek ? 'el' : 'en');
       if (!isGreek) {
-        window.location.replace('/index.html');
+        window.location.replace('/index.html' + keepHash);
         return;
       }
     }
@@ -493,7 +497,7 @@ body.is-mobile .map-gps{display:flex;}
     <!-- Language switcher: ίδιος με το site. ΦΑΣΗ 1: τα links δεν οδηγούν
          κάπου ακόμη (href="#") — όταν μεταφραστεί η σελίδα στις 14 γλώσσες,
          βάζουμε τα κανονικά paths (de/booking.html κ.λπ.). -->
-    <a href="/index.html" onclick="try{localStorage.setItem('preferredLang','en');}catch(e){}" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Switch to English">
+    <a href="/index.html" onclick="try{localStorage.setItem('preferredLang','en');}catch(e){} this.href='/index.html'+(window.location.hash||'');" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Switch to English">
       <img src="https://flagcdn.com/w20/gb.png" width="18"> EN
     </a>
   </div>

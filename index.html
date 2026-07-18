@@ -465,9 +465,13 @@ body.is-mobile .map-gps{display:flex;}
 // Κριτήριο: ΜΟΝΟ η γλώσσα του browser (navigator.language) — ΟΧΙ χώρα/IP.
 (function(){
   try {
+    // ── Διατήρηση του #partner-filter hash σε κάθε αλλαγή γλώσσας/redirect —
+    // αλλιώς ο συνεργάτης που ανοίγει link με φίλτρο (π.χ. #villas) και
+    // ανακατευθύνεται στην άλλη γλώσσα έβλεπε ΟΛΟΥΣ τους πελάτες.
+    var keepHash = window.location.hash || '';
     var saved = localStorage.getItem('preferredLang');
     if (saved === 'el') {
-      window.location.replace('/EL/booking2.html');
+      window.location.replace('/EL/booking2.html' + keepHash);
       return;
     }
     if (!saved) {
@@ -475,7 +479,7 @@ body.is-mobile .map-gps{display:flex;}
       var isGreek = langs.some(function(l){ return /^el\b/i.test(l); });
       if (isGreek) {
         localStorage.setItem('preferredLang', 'el');
-        window.location.replace('/EL/booking2.html');
+        window.location.replace('/EL/booking2.html' + keepHash);
         return;
       }
       localStorage.setItem('preferredLang', 'en');
@@ -495,7 +499,7 @@ body.is-mobile .map-gps{display:flex;}
     <!-- Language switcher: ίδιος με το site. ΦΑΣΗ 1: τα links δεν οδηγούν
          κάπου ακόμη (href="#") — όταν μεταφραστεί η σελίδα στις 14 γλώσσες,
          βάζουμε τα κανονικά paths (de/booking.html κ.λπ.). -->
-    <a href="/EL/booking2.html" onclick="try{localStorage.setItem('preferredLang','el');}catch(e){}" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Μετάβαση στα Ελληνικά">
+    <a href="/EL/booking2.html" onclick="try{localStorage.setItem('preferredLang','el');}catch(e){} this.href='/EL/booking2.html'+(window.location.hash||'');" class="dropbtn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;" title="Μετάβαση στα Ελληνικά">
       <img src="https://flagcdn.com/w20/gr.png" width="18"> EL
     </a>
   </div>
