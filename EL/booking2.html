@@ -2661,6 +2661,7 @@ function activateCatalogMode(){
         if (value === 'other'){
           dd.hide();
           if (inputWithMap) inputWithMap.style.display = '';
+          if (oldAcList) oldAcList.style.display = '';
           input.value = '';
           input.focus();
           if (gpsBtn) gpsBtn.style.display = '';

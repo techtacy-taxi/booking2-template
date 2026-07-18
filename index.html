@@ -580,7 +580,7 @@ body.is-mobile .map-gps{display:flex;}
             </div>
           </div>
           <div class="duo">
-            <div class="fld"><label><i class="far fa-calendar li"></i>Date</label><input type="date" id="date"></div>
+            <div class="fld"><label><i class="far fa-calendar li"></i>Date</label><input type="date" id="date" lang="en-GB"></div>
             <div class="fld"><label><i class="far fa-clock li"></i>Time</label>
               <div class="time-wrap">
                 <input type="text" id="time" readonly placeholder="Select time" autocomplete="off">
@@ -2663,6 +2663,7 @@ function activateCatalogMode(){
         if (value === 'other'){
           dd.hide();
           if (inputWithMap) inputWithMap.style.display = '';
+          if (oldAcList) oldAcList.style.display = '';
           input.value = '';
           input.focus();
           if (gpsBtn) gpsBtn.style.display = '';
