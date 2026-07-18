@@ -2329,44 +2329,111 @@ document.addEventListener('click', (e)=>{
   if (!ccBtn.contains(e.target) && !ccList.contains(e.target)) ccList.classList.remove('open');
 });
 
-/* ---- Scrollable time picker (5λεπτα intervals) ---- */
+/* ---- Ρολόι επιλογής ώρας (Material clock — ίδιο σε Android & PC) ---- */
 (function(){
-  const wrap = document.querySelector('.time-wrap');
   const input = document.getElementById('time');
-  const scroll = document.getElementById('timeScroll');
-  if (!wrap || !input || !scroll) return;
+  if (!input) return;
+  const oldScroll = document.getElementById('timeScroll');
+  if (oldScroll) oldScroll.remove();
 
-  for (let h=0; h<24; h++){
-    for (let m=0; m<60; m+=5){
-      const hh = String(h).padStart(2,'0');
-      const mm = String(m).padStart(2,'0');
-      const val = hh+':'+mm;
-      const opt = document.createElement('div');
-      opt.className = 'time-opt';
-      opt.textContent = val;
-      opt.dataset.val = val;
-      opt.addEventListener('click', ()=>{
-        input.value = val;
-        scroll.querySelectorAll('.time-opt').forEach(o=>o.classList.remove('sel'));
-        opt.classList.add('sel');
-        wrap.classList.remove('open');
-        if (typeof scheduleEstimate === 'function') scheduleEstimate();
-      });
-      scroll.appendChild(opt);
-    }
+  const css = document.createElement('style');
+  css.textContent = [
+  '.clkOverlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;z-index:99999;align-items:center;justify-content:center;}',
+  '.clkOverlay.open{display:flex;}',
+  '.clkBox{background:#16233a;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:18px 18px 10px;width:300px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.5);}',
+  '.clkHead{display:flex;justify-content:center;gap:6px;font-size:2.1rem;font-weight:700;color:#8a97ad;margin-bottom:12px;user-select:none;}',
+  '.clkHead span{cursor:pointer;}',
+  '.clkHead span.on{color:var(--primary-color,#ffc107);}',
+  '.clkDial{position:relative;width:256px;height:256px;margin:0 auto;border-radius:50%;background:rgba(255,255,255,.05);}',
+  '.clkNum{position:absolute;width:36px;height:36px;line-height:36px;text-align:center;border-radius:50%;color:#fff;font-size:.95rem;cursor:pointer;user-select:none;transform:translate(-50%,-50%);z-index:2;}',
+  '.clkNum:hover{background:rgba(255,255,255,.12);}',
+  '.clkNum.inner{color:#93a1b8;font-size:.8rem;}',
+  '.clkNum.sel{background:var(--primary-color,#ffc107);color:#10203a;font-weight:700;}',
+  '.clkHand{position:absolute;left:50%;top:50%;width:2px;background:var(--primary-color,#ffc107);transform-origin:top center;pointer-events:none;opacity:.85;z-index:1;}',
+  '.clkDot{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:var(--primary-color,#ffc107);z-index:1;}',
+  '.clkBtns{display:flex;justify-content:flex-end;gap:16px;margin-top:12px;}',
+  '.clkBtns button{background:none;border:none;color:var(--primary-color,#ffc107);font-weight:700;font-size:1rem;cursor:pointer;padding:8px 6px;}',
+  ].join('\n');
+  document.head.appendChild(css);
+
+  const ov = document.createElement('div');
+  ov.className = 'clkOverlay';
+  ov.innerHTML =
+    '<div class="clkBox">' +
+      '<div class="clkHead"><span id="clkH" class="on">--</span><span>:</span><span id="clkM">--</span></div>' +
+      '<div class="clkDial" id="clkDial"><div class="clkDot"></div><div class="clkHand" id="clkHand" style="display:none"></div></div>' +
+      '<div class="clkBtns"><button type="button" id="clkCancel">Άκυρο</button><button type="button" id="clkOk">OK</button></div>' +
+    '</div>';
+  document.body.appendChild(ov);
+
+  const dial = ov.querySelector('#clkDial');
+  const hEl = ov.querySelector('#clkH');
+  const mEl = ov.querySelector('#clkM');
+  const hand = ov.querySelector('#clkHand');
+  let mode = 'h', H = null, M = null;
+  const C = 128, RO = 104, RI = 66;
+
+  function place(el, ang, r){
+    el.style.left = (C + r * Math.sin(ang)) + 'px';
+    el.style.top  = (C - r * Math.cos(ang)) + 'px';
   }
-
-  input.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    const wasOpen = wrap.classList.contains('open');
-    wrap.classList.toggle('open');
-    if (!wasOpen){
-      const sel = scroll.querySelector('.time-opt.sel') || scroll.querySelector('.time-opt');
-      if (sel) setTimeout(()=>{ sel.scrollIntoView({block:'center'}); }, 20);
+  function upd(){
+    hEl.textContent = H == null ? '--' : String(H).padStart(2,'0');
+    mEl.textContent = M == null ? '--' : String(M).padStart(2,'0');
+  }
+  function render(){
+    dial.querySelectorAll('.clkNum').forEach(n => n.remove());
+    if (mode === 'h'){
+      // Εξωτερικός δακτύλιος 1-12, εσωτερικός 13-23 + 00 (24ωρο, όπως Android)
+      for (let i = 0; i < 24; i++){
+        const outer = (i >= 1 && i <= 12);
+        const ang = ((i % 12) / 12) * 2 * Math.PI;
+        const d = document.createElement('div');
+        d.className = 'clkNum' + (outer ? '' : ' inner') + (H === i ? ' sel' : '');
+        d.textContent = String(i).padStart(2,'0');
+        place(d, ang, outer ? RO : RI);
+        d.addEventListener('click', ()=>{ H = i; upd(); mode = 'm'; render(); });
+        dial.appendChild(d);
+      }
+    } else {
+      for (let m = 0; m < 60; m += 5){
+        const ang = (m / 60) * 2 * Math.PI;
+        const d = document.createElement('div');
+        d.className = 'clkNum' + (M === m ? ' sel' : '');
+        d.textContent = String(m).padStart(2,'0');
+        place(d, ang, RO);
+        d.addEventListener('click', ()=>{ M = m; upd(); render(); });
+        dial.appendChild(d);
+      }
     }
-  });
-  document.addEventListener('click', (e)=>{
-    if (!wrap.contains(e.target)) wrap.classList.remove('open');
+    const frac = mode === 'h' ? (H == null ? null : (H % 12) / 12) : (M == null ? null : M / 60);
+    const r = mode === 'h' ? ((H != null && (H === 0 || H > 12)) ? RI : RO) : RO;
+    if (frac == null){ hand.style.display = 'none'; }
+    else {
+      hand.style.display = '';
+      hand.style.height = (r - 18) + 'px';
+      hand.style.transform = 'rotate(' + (frac * 360 + 180) + 'deg)';
+    }
+    hEl.classList.toggle('on', mode === 'h');
+    mEl.classList.toggle('on', mode === 'm');
+  }
+  function openClk(){
+    const cur = (input.value || '').match(/^(\d{2}):(\d{2})$/);
+    if (cur){ H = +cur[1]; M = +cur[2]; }
+    mode = 'h'; upd(); render();
+    ov.classList.add('open');
+  }
+  input.addEventListener('click', (e)=>{ e.stopPropagation(); e.preventDefault(); openClk(); });
+  hEl.addEventListener('click', ()=>{ mode = 'h'; render(); });
+  mEl.addEventListener('click', ()=>{ mode = 'm'; render(); });
+  ov.querySelector('#clkCancel').addEventListener('click', ()=>ov.classList.remove('open'));
+  ov.addEventListener('click', (e)=>{ if (e.target === ov) ov.classList.remove('open'); });
+  ov.querySelector('#clkOk').addEventListener('click', ()=>{
+    if (H == null){ mode = 'h'; render(); return; }
+    if (M == null) M = 0;
+    input.value = String(H).padStart(2,'0') + ':' + String(M).padStart(2,'0');
+    ov.classList.remove('open');
+    if (typeof scheduleEstimate === 'function') scheduleEstimate();
   });
 })();
 
