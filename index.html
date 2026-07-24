@@ -2537,7 +2537,16 @@ async function loadFrequentClients(){
       // Πριν, αυτή η φόρμα ενεργοποιούσε clients-only mode ΜΟΝΟ όταν ήταν
       // κλειστό το placesEnabled — τώρα σέβεται και το ρητό flag του tenant,
       // ίδιο με το el/booking.html.
-      if (j.clientsOnlyBooking === true && !_clientsOnlyActivated2){
+      // ⚠️ ΑΣΦΑΛΕΙΑ: αν ένα φίλτρο URL (#tag) δεν ταιριάξει με ΚΑΝΕΝΑΝ
+      // πελάτη, ο κατάλογος θα έβγαινε ΑΔΕΙΟΣ και ο επισκέπτης δεν θα
+      // μπορούσε να κάνει καμία κράτηση. Τότε μένουμε στην ΚΛΑΣΙΚΗ
+      // λειτουργία (ελεύθερη πληκτρολόγηση + Google Places).
+      const _hasClients = _frequentClients.length > 0;
+      if (!_hasClients) {
+        console.warn('Κανένας πελάτης δεν ταιριάζει με το φίλτρο — '
+                   + 'επιστροφή σε κλασική αναζήτηση (Places).');
+      }
+      if (_hasClients && j.clientsOnlyBooking === true && !_clientsOnlyActivated2){
         _clientsOnlyActivated2 = true;
         _clientsOnlyBooking = true;
         activateClientsOnlyMode();
@@ -2547,7 +2556,7 @@ async function loadFrequentClients(){
       // clientsOnlyBooking παραπάνω: ενεργό ΜΟΝΟ αν το tenant το έχει
       // ρητά ενεργοποιημένο, και ΜΟΝΟ αν clientsOnlyBooking δεν είναι ήδη
       // ενεργό (αμοιβαία αποκλειόμενα, όπως δείχνει και το admin panel).
-      if (j.clientsCatalogMode === true && !_clientsOnlyBooking && !_catalogModeActivated){
+      if (_hasClients && j.clientsCatalogMode === true && !_clientsOnlyBooking && !_catalogModeActivated){
         _catalogModeActivated = true;
         _clientsCatalogMode = true;
         activateCatalogMode();
