@@ -237,6 +237,14 @@ body{
 .price-box .pv-night{color:var(--text-muted);font-size:.68rem;font-weight:600;white-space:nowrap;}
 .price-footnote{color:var(--text-muted);font-size:.66rem;margin-top:6px;text-align:right;}
 .deposit-banner{margin-top:14px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.35);border-radius:12px;padding:12px 14px;display:flex;align-items:flex-start;gap:11px;}
+.help-banner{margin-top:14px;background:rgba(74,144,217,.08);border:1px solid rgba(74,144,217,.35);border-radius:12px;padding:12px 14px;display:flex;align-items:flex-start;gap:11px;}
+.help-banner i.help-ic{color:#4a90d9;font-size:17px;margin-top:2px;}
+.help-banner .hb-title{color:var(--white);font-size:12.5px;font-weight:700;margin-bottom:3px;}
+.help-banner .hb-text{color:var(--text-muted);font-size:11.5px;line-height:1.5;margin-bottom:9px;}
+.help-banner .hb-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.help-banner .hb-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;font-size:11.5px;font-weight:700;text-decoration:none;}
+.help-banner .hb-btn.wa{background:var(--whatsapp);color:#fff;}
+.help-banner .hb-btn.mail{background:var(--dark-tertiary);color:var(--text-light);border:1px solid var(--field-border);}
 .deposit-banner i{color:var(--primary-color);font-size:18px;margin-top:2px;flex-shrink:0;}
 .deposit-banner .db-title{color:var(--white);font-weight:700;font-size:.85rem;margin-bottom:3px;}
 .deposit-banner .db-amt{color:var(--text-muted);font-size:.76rem;line-height:1.4;}
@@ -580,7 +588,7 @@ body.is-mobile .map-gps{display:flex;}
             </div>
           </div>
           <div class="duo">
-            <div class="fld"><label><i class="far fa-calendar li"></i>Date</label><input type="text" id="date" placeholder="dd/mm/yyyy" onfocus="this.type='date';try{this.showPicker&&this.showPicker();}catch(e){}" onblur="if(!this.value)this.type='text';"></div>
+            <div class="fld"><label><i class="far fa-calendar li"></i>Date</label><input type="text" id="date" autocomplete="off" placeholder="dd/mm/yyyy" onfocus="this.type='date';try{this.showPicker&&this.showPicker();}catch(e){}" onblur="if(!this.value)this.type='text';"></div>
             <div class="fld"><label><i class="far fa-clock li"></i>Time</label>
               <div class="time-wrap">
                 <input type="text" id="time" readonly placeholder="Select time" autocomplete="off">
@@ -736,6 +744,17 @@ body.is-mobile .map-gps{display:flex;}
         <button class="submit" id="sendBtn" type="button"><i class="fas fa-credit-card"></i> Pay deposit &amp; submit</button>
         <div class="note" id="payNote">You will be redirected to the secure Viva payment page. The booking is confirmed only after successful payment.</div>
         <div class="note" style="margin-top:6px;">By clicking the button you accept our <a href="terms.html" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">Terms &amp; Conditions</a> and <a href="privacy-policy.html" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">Privacy Policy</a>.</div>
+      </div>
+      <div class="help-banner" id="helpBanner" style="display:none;">
+        <i class="fas fa-circle-question help-ic"></i>
+        <div style="flex:1;">
+          <div class="hb-title">Need help with your booking?</div>
+          <div class="hb-text">If your trip is complex — not a simple transfer — or you're not sure what to choose, contact us directly and we'll help you book it correctly.</div>
+          <div class="hb-actions">
+            <a class="hb-btn wa" id="helpWaLink" href="#" target="_blank" rel="noopener"><i class="fab fa-whatsapp"></i> WhatsApp (recommended)</a>
+            <a class="hb-btn mail" id="helpEmailLink" href="#"><i class="fas fa-envelope"></i> Email</a>
+          </div>
+        </div>
       </div>
       <div class="van-msg" id="waArea" style="display:none;">
         <p id="waReasonText">This booking can't be sent automatically — please contact us.</p>
@@ -1323,6 +1342,14 @@ btn.addEventListener('click', async ()=>{
   if (!data.name){ flash('err','<i class="fas fa-exclamation-circle"></i> Please enter your full name'); return; }
   if (!document.getElementById('phone').value.trim()){ flash('err','<i class="fas fa-exclamation-circle"></i> Please enter your phone number'); return; }
   if (!data.date || !data.time){ flash('err','<i class="fas fa-exclamation-circle"></i> Please select date and time'); return; }
+  // CRITICAL: the date field is a text input (becomes type=date on focus) so
+  // browser autofill can put e.g. the customer NAME in it. Without this check
+  // the server silently used the booking time as the appointment time.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data.date) || !/^\d{1,2}:\d{2}$/.test(data.time)){
+    flash('err','<i class="fas fa-exclamation-circle"></i> Invalid date/time — please select again');
+    try{ document.getElementById('date').value=''; }catch(e){}
+    return;
+  }
   if (!isValidEmail(data.email)){ flash('err','<i class="fas fa-exclamation-circle"></i> Please enter a valid email'); return; }
   if (!data.flight){ flash('err','<i class="fas fa-exclamation-circle"></i> Please enter flight/ship (or 0)'); return; }
 
@@ -2815,6 +2842,20 @@ async function loadTenantBusinessInfo(){
       if (el){ el.href = 'mailto:' + j.contactEmail; el.textContent = j.contactEmail; }
     }
     if (j.whatsappNumber){ _tenantWhatsappNumber = j.whatsappNumber.replace(/[^0-9]/g,''); }
+    // ── Πλαίσιο βοήθειας κάτω από το κουμπί πληρωμής — ελέγχεται από τον
+    // διακόπτη "Πλαίσιο βοήθειας" στις Ζώνες & Τιμές αυτού του tenant.
+    if (j.helpBannerEnabled !== false){
+      const banner = document.getElementById('helpBanner');
+      if (banner){
+        const phone = (j.whatsappNumber || j.contactPhone || '306936123322').replace(/[^0-9]/g,'');
+        const email = j.contactEmail || '';
+        const waEl = document.getElementById('helpWaLink');
+        if (waEl) waEl.href = 'https://wa.me/' + phone + '?text=' + encodeURIComponent('Hello! I need some help with my booking.');
+        const mailEl = document.getElementById('helpEmailLink');
+        if (mailEl && email) mailEl.href = 'mailto:' + email;
+        banner.style.display = 'flex';
+      }
+    }
     // Διακόπτες master — αν οποιοσδήποτε έχει κοπεί, ενημέρωσε αμέσως το UI.
     _mapEnabled = j.mapEnabled !== false;
     _placesEnabled = j.placesEnabled !== false;
