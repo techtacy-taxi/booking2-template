@@ -33,9 +33,9 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 <div class="wrap">
   <a href="booking2.html" class="back">&larr; Επιστροφή στη φόρμα κράτησης</a>
   <h1>Πολιτική Απορρήτου</h1>
-  <div class="updated">Τελευταία ενημέρωση: <span class="placeholder">[ΗΜΕΡΟΜΗΝΙΑ]</span></div>
+  <div class="updated">Τελευταία ενημέρωση: <span id="ttLastUpdated">[ΗΜΕΡΟΜΗΝΙΑ]</span></div>
 
-  <p>Η επιχείρηση <span class="placeholder">[Όνομα Επιχείρησης]</span> σέβεται την ιδιωτικότητά
+  <p>Η επιχείρηση <span id="ttBusinessName" class="placeholder">[Όνομα Επιχείρησης]</span> σέβεται την ιδιωτικότητά
   σας. Η παρούσα πολιτική εξηγεί ποια στοιχεία συλλέγουμε μέσω της φόρμας κράτησης και πώς τα
   χρησιμοποιούμε.</p>
 
@@ -63,13 +63,45 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 
   <h2>5. Τα δικαιώματά σας</h2>
   <p>Έχετε δικαίωμα πρόσβασης, διόρθωσης ή διαγραφής των προσωπικών σας δεδομένων. Για να
-  ασκήσετε αυτά τα δικαιώματα, επικοινωνήστε στο <span class="placeholder">[email]</span>.</p>
+  ασκήσετε αυτά τα δικαιώματα, επικοινωνήστε στο <span id="ttEmail" class="placeholder">[email]</span>.</p>
 
   <h2>6. Cookies</h2>
   <p>Η φόρμα κράτησης χρησιμοποιεί μόνο τεχνικά απαραίτητα cookies/session δεδομένα για τη σωστή
   λειτουργία της (π.χ. Google Maps autocomplete), όχι cookies παρακολούθησης/διαφήμισης.</p>
 
-  <footer>© <span class="placeholder">[Όνομα Επιχείρησης]</span> — Όλα τα δικαιώματα διατηρούνται.</footer>
+  <footer>© <span id="ttBusinessNameFooter" class="placeholder">[Όνομα Επιχείρησης]</span> — Όλα τα δικαιώματα διατηρούνται.</footer>
 </div>
+<script>
+// ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο ΙΔΙΟ EformID που έχεις στο index.html/booking2.html
+const EFORM_ID = "seretis_form";
+
+(function(){
+  var d = new Date();
+  var months = ['Ιανουάριος','Φεβρουάριος','Μάρτιος','Απρίλιος','Μάιος','Ιούνιος','Ιούλιος','Αύγουστος','Σεπτέμβριος','Οκτώβριος','Νοέμβριος','Δεκέμβριος'];
+  var elLU = document.getElementById('ttLastUpdated');
+  if (elLU) elLU.textContent = months[d.getMonth()] + ' ' + d.getFullYear();
+
+  fetch('https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/getTenantBusinessInfo', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({tenantId: EFORM_ID})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (!data || data.ok !== true) return;
+    if (data.businessName) {
+      ['ttBusinessName','ttBusinessNameFooter'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.textContent = data.businessName;
+      });
+    }
+    if (data.contactEmail) {
+      var elE = document.getElementById('ttEmail');
+      if (elE) elE.textContent = data.contactEmail;
+    }
+  })
+  .catch(function(){ /* Αποτυχία δικτύου — μένουν τα [placeholders] */ });
+})();
+</script>
 </body>
 </html>

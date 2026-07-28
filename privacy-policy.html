@@ -33,9 +33,9 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 <div class="wrap">
   <a href="index.html" class="back">&larr; Back to booking form</a>
   <h1>Privacy Policy</h1>
-  <div class="updated">Last updated: <span class="placeholder">[DATE]</span></div>
+  <div class="updated">Last updated: <span id="ttLastUpdated">[DATE]</span></div>
 
-  <p><span class="placeholder">[Business Name]</span> respects your privacy. This policy explains
+  <p><span id="ttBusinessName" class="placeholder">[Business Name]</span> respects your privacy. This policy explains
   what information we collect through the booking form and how we use it.</p>
 
   <h2>1. Information we collect</h2>
@@ -61,13 +61,45 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 
   <h2>5. Your rights</h2>
   <p>You have the right to access, correct, or delete your personal data. To exercise these
-  rights, contact us at <span class="placeholder">[email]</span>.</p>
+  rights, contact us at <span id="ttEmail" class="placeholder">[email]</span>.</p>
 
   <h2>6. Cookies</h2>
   <p>The booking form only uses technically necessary cookies/session data for it to function
   properly (e.g. Google Maps autocomplete), not tracking/advertising cookies.</p>
 
-  <footer>© <span class="placeholder">[Business Name]</span> — All rights reserved.</footer>
+  <footer>© <span id="ttBusinessNameFooter" class="placeholder">[Business Name]</span> — All rights reserved.</footer>
 </div>
+<script>
+// ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο ΙΔΙΟ EformID που έχεις στο index.html/booking2.html
+const EFORM_ID = "seretis_form";
+
+(function(){
+  var d = new Date();
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var elLU = document.getElementById('ttLastUpdated');
+  if (elLU) elLU.textContent = months[d.getMonth()] + ' ' + d.getFullYear();
+
+  fetch('https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/getTenantBusinessInfo', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({tenantId: EFORM_ID})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (!data || data.ok !== true) return;
+    if (data.businessName) {
+      ['ttBusinessName','ttBusinessNameFooter'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.textContent = data.businessName;
+      });
+    }
+    if (data.contactEmail) {
+      var elE = document.getElementById('ttEmail');
+      if (elE) elE.textContent = data.contactEmail;
+    }
+  })
+  .catch(function(){ /* Αποτυχία δικτύου — μένουν τα [placeholders] */ });
+})();
+</script>
 </body>
 </html>

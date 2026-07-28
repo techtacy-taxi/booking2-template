@@ -33,10 +33,10 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 <div class="wrap">
   <a href="index.html" class="back">&larr; Back to booking form</a>
   <h1>Terms &amp; Conditions</h1>
-  <div class="updated">Last updated: <span class="placeholder">[DATE]</span></div>
+  <div class="updated">Last updated: <span id="ttLastUpdated">[DATE]</span></div>
 
   <p>These Terms &amp; Conditions govern the use of the online transfer booking form operated by
-  <span class="placeholder">[Business Name]</span> ("we", "the business"). By submitting a booking
+  <span id="ttBusinessName" class="placeholder">[Business Name]</span> ("we", "the business"). By submitting a booking
   through this form, you accept the terms below.</p>
 
   <h2>1. Booking &amp; Confirmation</h2>
@@ -46,13 +46,18 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 
   <h2>2. Payment</h2>
   <p>Payments are processed securely through Viva Payments. We do not store card details on our
-  own servers. If you choose "Deposit", the remaining amount is paid directly to the driver upon
+  own servers. If you choose "Deposit", a <strong><span id="ttDepositPercent">10</span>%</strong> deposit of the total price is charged online, and the remaining amount is paid directly to the driver upon
   completion of the trip.</p>
 
   <h2>3. Cancellation &amp; Changes</h2>
   <p>To cancel or change a booking, please contact us as soon as possible using the contact
-  details shown on the form. The deposit may be non-refundable in case of cancellation with short
-  notice.</p>
+  details shown on the form.</p>
+  <ul>
+    <li>Cancellation <strong>24+ hours</strong> before the scheduled pickup time: full refund of the deposit.</li>
+    <li>Cancellation <strong>less than 24 hours</strong> before, or no-show without prior notice: the deposit is non-refundable.</li>
+    <li>If we are unable to serve your booking, your deposit is refunded in full.</li>
+  </ul>
+  <p class="placeholder" style="display:inline-block;margin-top:6px;">[Adjust the cancellation window above if your business uses a different policy]</p>
 
   <h2>4. Liability</h2>
   <p>The business is not liable for delays caused by force majeure, traffic congestion, weather
@@ -66,9 +71,52 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 
   <h2>6. Contact</h2>
   <p>For any questions regarding these terms, contact us at
-  <span class="placeholder">[phone]</span> or <span class="placeholder">[email]</span>.</p>
+  <span id="ttPhone" class="placeholder">[phone]</span> or <span id="ttEmail" class="placeholder">[email]</span>.</p>
 
-  <footer>© <span class="placeholder">[Business Name]</span> — All rights reserved.</footer>
+  <footer>© <span id="ttBusinessNameFooter" class="placeholder">[Business Name]</span> — All rights reserved.</footer>
 </div>
+<script>
+// ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο ΙΔΙΟ EformID που έχεις στο index.html/booking2.html
+// (π.χ. "seretis_form", "rhodes_taxi") — ώστε να εμφανίζονται τα σωστά
+// στοιχεία επιχείρησης/προκαταβολής αυτού του tenant.
+const EFORM_ID = "seretis_form";
+
+(function(){
+  var d = new Date();
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var elLU = document.getElementById('ttLastUpdated');
+  if (elLU) elLU.textContent = months[d.getMonth()] + ' ' + d.getFullYear();
+
+  fetch('https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/getTenantBusinessInfo', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({tenantId: EFORM_ID})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (!data || data.ok !== true) return;
+
+    if (typeof data.depositPercent === 'number') {
+      var elDP = document.getElementById('ttDepositPercent');
+      if (elDP) elDP.textContent = data.depositPercent;
+    }
+    if (data.businessName) {
+      ['ttBusinessName','ttBusinessNameFooter'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.textContent = data.businessName;
+      });
+    }
+    if (data.contactPhone) {
+      var elP = document.getElementById('ttPhone');
+      if (elP) elP.textContent = data.contactPhone;
+    }
+    if (data.contactEmail) {
+      var elE = document.getElementById('ttEmail');
+      if (elE) elE.textContent = data.contactEmail;
+    }
+  })
+  .catch(function(){ /* Αποτυχία δικτύου — μένουν τα [placeholders] */ });
+})();
+</script>
 </body>
 </html>

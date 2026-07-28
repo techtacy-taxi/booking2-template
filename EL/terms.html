@@ -34,10 +34,10 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 <div class="wrap">
   <a href="booking2.html" class="back">&larr; Επιστροφή στη φόρμα κράτησης</a>
   <h1>Όροι &amp; Προϋποθέσεις</h1>
-  <div class="updated">Τελευταία ενημέρωση: <span class="placeholder">[ΗΜΕΡΟΜΗΝΙΑ]</span></div>
+  <div class="updated">Τελευταία ενημέρωση: <span id="ttLastUpdated">[ΗΜΕΡΟΜΗΝΙΑ]</span></div>
 
   <p>Οι παρόντες Όροι &amp; Προϋποθέσεις διέπουν τη χρήση της φόρμας online κράτησης μεταφοράς
-  της επιχείρησης <span class="placeholder">[Όνομα Επιχείρησης]</span> («εμείς», «η επιχείρηση»).
+  της επιχείρησης <span id="ttBusinessName" class="placeholder">[Όνομα Επιχείρησης]</span> («εμείς», «η επιχείρηση»).
   Με την υποβολή κράτησης μέσω αυτής της φόρμας, αποδέχεστε τους παρακάτω όρους.</p>
 
   <h2>1. Κράτηση &amp; Επιβεβαίωση</h2>
@@ -49,12 +49,17 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
   <h2>2. Πληρωμή</h2>
   <p>Οι πληρωμές διεκπεραιώνονται με ασφάλεια μέσω της Viva Payments. Δεν αποθηκεύουμε στοιχεία
   κάρτας στους δικούς μας διακομιστές. Σε περίπτωση επιλογής «Προκαταβολή», το υπόλοιπο ποσό
-  καταβάλλεται απευθείας στον οδηγό κατά την ολοκλήρωση της διαδρομής.</p>
+  καταβάλλεται απευθείας στον οδηγό κατά την ολοκλήρωση της διαδρομής. Η προκαταβολή αντιστοιχεί σε <strong><span id="ttDepositPercent">10</span>%</strong> της συνολικής τιμής.</p>
 
   <h2>3. Ακύρωση &amp; Αλλαγές</h2>
   <p>Για ακύρωση ή αλλαγή κράτησης, παρακαλούμε επικοινωνήστε μαζί μας το συντομότερο δυνατόν
-  στα στοιχεία επικοινωνίας που αναγράφονται στη φόρμα. Η προκαταβολή ενδέχεται να μην
-  επιστρέφεται σε περίπτωση ακύρωσης με μικρή προειδοποίηση.</p>
+  στα στοιχεία επικοινωνίας που αναγράφονται στη φόρμα.</p>
+  <ul>
+    <li>Ακύρωση <strong>24+ ώρες</strong> πριν την προγραμματισμένη ώρα παραλαβής: πλήρης επιστροφή της προκαταβολής.</li>
+    <li>Ακύρωση <strong>λιγότερο από 24 ώρες</strong> πριν, ή μη εμφάνιση χωρίς προειδοποίηση: η προκαταβολή δεν επιστρέφεται.</li>
+    <li>Αν δεν μπορέσουμε να εξυπηρετήσουμε την κράτησή σας, η προκαταβολή επιστρέφεται στο ακέραιο.</li>
+  </ul>
+  <p class="placeholder" style="display:inline-block;margin-top:6px;">[Προσαρμόστε το χρονικό όριο ακύρωσης αν η επιχείρησή σας έχει διαφορετική πολιτική]</p>
 
   <h2>4. Ευθύνη</h2>
   <p>Η επιχείρηση δεν φέρει ευθύνη για καθυστερήσεις που οφείλονται σε ανωτέρα βία, κυκλοφοριακή
@@ -68,9 +73,52 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 
   <h2>6. Επικοινωνία</h2>
   <p>Για οποιαδήποτε ερώτηση σχετικά με τους παρόντες όρους, επικοινωνήστε στο
-  <span class="placeholder">[τηλέφωνο]</span> ή <span class="placeholder">[email]</span>.</p>
+  <span id="ttPhone" class="placeholder">[τηλέφωνο]</span> ή <span id="ttEmail" class="placeholder">[email]</span>.</p>
 
-  <footer>© <span class="placeholder">[Όνομα Επιχείρησης]</span> — Όλα τα δικαιώματα διατηρούνται.</footer>
+  <footer>© <span id="ttBusinessNameFooter" class="placeholder">[Όνομα Επιχείρησης]</span> — Όλα τα δικαιώματα διατηρούνται.</footer>
 </div>
+<script>
+// ⚠️ ΑΛΛΑΞΕ ΑΥΤΟ στο ΙΔΙΟ EformID που έχεις στο index.html/booking2.html
+// (π.χ. "seretis_form", "rhodes_taxi") — ώστε να εμφανίζονται τα σωστά
+// στοιχεία επιχείρησης/προκαταβολής αυτού του tenant.
+const EFORM_ID = "seretis_form";
+
+(function(){
+  var d = new Date();
+  var months = ['Ιανουάριος','Φεβρουάριος','Μάρτιος','Απρίλιος','Μάιος','Ιούνιος','Ιούλιος','Αύγουστος','Σεπτέμβριος','Οκτώβριος','Νοέμβριος','Δεκέμβριος'];
+  var elLU = document.getElementById('ttLastUpdated');
+  if (elLU) elLU.textContent = months[d.getMonth()] + ' ' + d.getFullYear();
+
+  fetch('https://us-central1-my-taxi-app-bbc7c.cloudfunctions.net/getTenantBusinessInfo', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({tenantId: EFORM_ID})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (!data || data.ok !== true) return;
+
+    if (typeof data.depositPercent === 'number') {
+      var elDP = document.getElementById('ttDepositPercent');
+      if (elDP) elDP.textContent = data.depositPercent;
+    }
+    if (data.businessName) {
+      ['ttBusinessName','ttBusinessNameFooter'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el) el.textContent = data.businessName;
+      });
+    }
+    if (data.contactPhone) {
+      var elP = document.getElementById('ttPhone');
+      if (elP) elP.textContent = data.contactPhone;
+    }
+    if (data.contactEmail) {
+      var elE = document.getElementById('ttEmail');
+      if (elE) elE.textContent = data.contactEmail;
+    }
+  })
+  .catch(function(){ /* Αποτυχία δικτύου — μένουν τα [placeholders] */ });
+})();
+</script>
 </body>
 </html>
