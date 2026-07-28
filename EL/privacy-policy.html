@@ -32,6 +32,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 <body>
 <div class="wrap">
   <a href="booking2.html" class="back">&larr; Επιστροφή στη φόρμα κράτησης</a>
+  <img src="logo.jpg" alt="Logo" id="brandLogo" style="max-height:48px;border-radius:6px;display:block;margin-bottom:14px;">
   <h1>Πολιτική Απορρήτου</h1>
   <div class="updated">Τελευταία ενημέρωση: <span id="ttLastUpdated">[ΗΜΕΡΟΜΗΝΙΑ]</span></div>
 
@@ -89,6 +90,10 @@ const EFORM_ID = "seretis_form";
   .then(function(r){ return r.json(); })
   .then(function(data){
     if (!data || data.ok !== true) return;
+    if (data.logoUrl) {
+      var elLogo = document.getElementById('brandLogo');
+      if (elLogo) elLogo.src = data.logoUrl;
+    }
     if (data.businessName) {
       ['ttBusinessName','ttBusinessNameFooter'].forEach(function(id){
         var el = document.getElementById(id);

@@ -32,6 +32,7 @@ footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--field-border)
 <body>
 <div class="wrap">
   <a href="index.html" class="back">&larr; Back to booking form</a>
+  <img src="logo.jpg" alt="Logo" id="brandLogo" style="max-height:48px;border-radius:6px;display:block;margin-bottom:14px;">
   <h1>Terms &amp; Conditions</h1>
   <div class="updated">Last updated: <span id="ttLastUpdated">[DATE]</span></div>
 
@@ -99,6 +100,10 @@ const EFORM_ID = "seretis_form";
     if (typeof data.depositPercent === 'number') {
       var elDP = document.getElementById('ttDepositPercent');
       if (elDP) elDP.textContent = data.depositPercent;
+    }
+    if (data.logoUrl) {
+      var elLogo = document.getElementById('brandLogo');
+      if (elLogo) elLogo.src = data.logoUrl;
     }
     if (data.businessName) {
       ['ttBusinessName','ttBusinessNameFooter'].forEach(function(id){
