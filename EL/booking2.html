@@ -585,7 +585,7 @@ body.is-mobile .map-gps{display:flex;}
             </div>
           </div>
           <div class="duo">
-            <div class="fld"><label><i class="far fa-calendar li"></i>Ημερομηνία</label><input type="date" id="date"></div>
+            <div class="fld"><label><i class="far fa-calendar li"></i>Ημερομηνία</label><input type="text" id="date" autocomplete="off" placeholder="ηη/μμ/εεεε" onfocus="this.type='date';try{this.showPicker&&this.showPicker();}catch(e){}" onblur="if(!this.value)this.type='text';"></div>
             <div class="fld"><label><i class="far fa-clock li"></i>Ώρα</label>
               <div class="time-wrap">
                 <input type="text" id="time" readonly placeholder="Επιλέξτε ώρα" autocomplete="off">
