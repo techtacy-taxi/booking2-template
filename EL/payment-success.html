@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="el">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<title>Payment Successful — Booking</title>
+<title>Επιτυχής Πληρωμή — Booking</title>
 <style>
   :root{
     --amber:#E0A227; --amber-deep:#B8720B; --green:#1E8E3E; --green-soft:#E8F5E9;
@@ -60,9 +60,9 @@
       <svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
     </div>
 
-    <h1>Payment successful</h1>
+    <h1>Η πληρωμή ολοκληρώθηκε</h1>
     <p class="lead">
-      Thank you! Your payment has been received and your transfer is confirmed.
+      Σας ευχαριστούμε! Η πληρωμή σας ελήφθη και η μεταφορά σας επιβεβαιώθηκε.
     </p>
 
     <div class="info" id="info" style="display:none;">
@@ -70,11 +70,11 @@
     </div>
 
     <div class="note">
-      📧 A confirmation email is on its way with all your booking details.<br>
-      If you don't see it within a few minutes, please check your spam folder.
+      📧 Θα λάβετε email επιβεβαίωσης με όλες τις λεπτομέρειες της κράτησής σας.<br>
+      Αν δεν το δείτε μέσα σε λίγα λεπτά, ελέγξτε τον φάκελο ανεπιθύμητων.
     </div>
 
-    <a class="btn btn-primary" href="booking2.html">Make another booking</a>
+    <a class="btn btn-primary" href="booking2.html">Νέα κράτηση</a>
   </div>
 
 <script>
@@ -84,9 +84,9 @@
   var b = p.get('booking') || p.get('bookingNumber');
   var amt = p.get('amount');
   var from = p.get('from'), to = p.get('to');
-  if (b)   rows.push('<b>Booking ID:</b> #' + b);
-  if (from && to) rows.push('<b>Route:</b> ' + from + ' → ' + to);
-  if (amt) rows.push('<b>Paid:</b> ' + amt + ' €');
+  if (b)   rows.push('<b>Κωδικός κράτησης:</b> #' + b);
+  if (from && to) rows.push('<b>Διαδρομή:</b> ' + from + ' → ' + to);
+  if (amt) rows.push('<b>Πληρώθηκε:</b> ' + amt + ' €');
   if (rows.length) {
     document.getElementById('infoRows').innerHTML = rows.join('<br>');
     document.getElementById('info').style.display = 'block';

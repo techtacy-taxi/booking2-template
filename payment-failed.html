@@ -1,11 +1,10 @@
 <!DOCTYPE html>
-<html lang="el">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<title>Η Πληρωμή Δεν Ολοκληρώθηκε — Booking</title>
-
+<title>Payment Not Completed — Booking</title>
 <style>
   :root{
     --amber:#E0A227; --amber-deep:#B8720B; --red:#C5221F; --red-soft:#FCE8E6;
@@ -54,24 +53,23 @@
       <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </div>
 
-    <h1>Η πληρωμή δεν ολοκληρώθηκε</h1>
+    <h1>Payment not completed</h1>
     <p class="lead">
-      Η πληρωμή ακυρώθηκε ή δεν ήταν δυνατό να ολοκληρωθεί.
-      <b>Δεν έχετε χρεωθεί.</b>
+      Your payment was cancelled or could not be processed.
+      <b>You have not been charged.</b>
     </p>
 
     <div class="note">
-      Αυτό μπορεί να συμβεί αν έκλεισε το παράθυρο πληρωμής, αν η κάρτα απορρίφθηκε,
-      ή αν έληξε ο χρόνος της συνεδρίας.<br><br>
-      Η κράτησή σας <b>δεν</b> έχει επιβεβαιωθεί. Δοκιμάστε ξανά ή επικοινωνήστε μαζί μας
-      και θα χαρούμε να σας βοηθήσουμε.
+      This can happen if the payment window was closed, the card was declined,
+      or the session expired.<br><br>
+      Your booking has <b>not</b> been confirmed. Please try again, or contact us
+      and we'll be glad to help.
     </div>
 
-    <a class="btn btn-primary" href="booking2.html">Δοκιμάστε ξανά</a>
+    <a class="btn btn-primary" href="booking2.html">Try booking again</a>
   </div>
 
 <script>
-// Καθαρίζουμε το ιστορικό ώστε το «πίσω» να μην ξαναγυρίζει στη σελίδα πληρωμής.
 (function () {
   if (window.history.replaceState) {
     window.history.replaceState(null, '', location.pathname);
