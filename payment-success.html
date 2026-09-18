@@ -75,6 +75,10 @@
     </div>
 
     <a class="btn btn-primary" href="booking2.html">Make another booking</a>
+
+    <div class="brand" id="brandBlock" style="display:none;">
+      Questions? <a id="contactEmailLink" href="#"></a>
+    </div>
   </div>
 
 <script>
@@ -93,6 +97,54 @@
   }
   if (window.history.replaceState) {
     window.history.replaceState(null, '', location.pathname);
+  }
+})();
+</script>
+
+<script>
+// Δυναμικό email επικοινωνίας — διαβάζει tenantId από το URL (η δική μου
+// σελίδα δουλεύει και ΧΩΡΙΣ παράμετρο, πέφτει σε "default" = εγώ), καλεί
+// το ήδη υπάρχον δημόσιο getTenantBusinessInfo, και δείχνει το email που
+// έχει γράψει ο καθένας στην καρτέλα «Επιχείρηση» των Ρυθμίσεων Online
+// Φόρμας. Αν κάτι αποτύχει, το κομμάτι επικοινωνίας απλά ΔΕΝ εμφανίζεται —
+// ποτέ σπασμένος σύνδεσμος/κενό email.
+(function () {
+  var params = new URLSearchParams(location.search);
+  var vivaOrderCode = params.get('s');       // η ίδια η Viva το στέλνει ΠΑΝΤΑ
+  var explicitTenantId = params.get('tenantId'); // Stripe/χειροκίνητο (πάντα σωστό, αν υπάρχει)
+
+  function showEmail(tenantId) {
+    fetch('https://gettenantbusinessinfo-x273xcmwca-uc.a.run.app?tenantId=' + encodeURIComponent(tenantId))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok || !d.contactEmail) return;
+        var a = document.getElementById('contactEmailLink');
+        var wrap = document.getElementById('brandBlock');
+        if (a && wrap) {
+          a.href = 'mailto:' + d.contactEmail;
+          a.textContent = d.contactEmail;
+          wrap.style.display = '';
+        }
+      })
+      .catch(function () { /* σιωπηλά — το κομμάτι επικοινωνίας μένει κρυφό */ });
+  }
+
+  // Σειρά προτεραιότητας:
+  //  1) Ρητό ?tenantId= στο URL (Stripe το βάζει πάντα αυτόματα· χειροκίνητο
+  //     αν κάποιος το πρόσθεσε ο ίδιος) — πιο άμεσο, δεν χρειάζεται δεύτερη κλήση.
+  //  2) Αλλιώς, αν υπάρχει ?s= (κωδικός παραγγελίας Viva — η ΙΔΙΑ η Viva το
+  //     στέλνει ΠΑΝΤΑ, αυτόματα, καμία χειροκίνητη ρύθμιση δεν χρειάζεται):
+  //     ψάχνουμε ποιανού tenant ήταν αυτή η παραγγελία.
+  //  3) Αλλιώς 'default' (η δική μου σελίδα, ή άγνωστη περίπτωση).
+  if (explicitTenantId) {
+    showEmail(explicitTenantId);
+  } else if (vivaOrderCode) {
+    fetch('https://gettenantidbyvivaorder-x273xcmwca-uc.a.run.app?orderCode=' + encodeURIComponent(vivaOrderCode))
+      .then(function (r) { return r.json(); })
+      .then(function (d) { showEmail((d && d.tenantId) || 'default'); })
+      .catch(function () { showEmail('default'); });
+  } else {
+    showEmail('default');
   }
 })();
 </script>
