@@ -1356,6 +1356,19 @@ btn.addEventListener('click', async ()=>{
 
   btn.disabled = true;
   setBtn('', '<i class="fas fa-spinner fa-spin"></i> ' + (state.noPaymentMode ? 'Sending booking…' : 'Creating payment…'));
+  // Αν η δημιουργία πληρωμής αργεί (επαναλήψεις προς την τράπεζα), μετά από
+  // 3'' αλλάζει το μήνυμα ώστε ο πελάτης να μη νομίσει ότι κόλλησε. Αλλάζει
+  // ΜΟΝΟ αν το κουμπί είναι ακόμη στην ίδια κατάσταση — δεν επηρεάζει
+  // επιτυχία, σφάλμα ή κράτηση χωρίς πληρωμή.
+  clearTimeout(window.__slowPayTimer);
+  if (!state.noPaymentMode) {
+    const __payBtnHtml = btn.innerHTML;
+    window.__slowPayTimer = setTimeout(function(){
+      if (btn.disabled && btn.innerHTML === __payBtnHtml) {
+        setBtn('', '<i class="fas fa-spinner fa-spin"></i> Connecting securely to the bank, please wait…');
+      }
+    }, 3000);
+  }
 
   try{
     if (state.noPaymentMode) {
